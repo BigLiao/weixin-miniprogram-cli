@@ -1,0 +1,31 @@
+{
+  "name": "wx-devtools-cli",
+  "version": "0.1.0",
+  "description": "微信开发者工具交互式 CLI 控制器",
+  "type": "module",
+  "main": "build/cli.js",
+  "bin": {
+    "wx-cli": "./build/cli.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x build/cli.js",
+    "watch": "tsc --watch",
+    "start": "node build/cli.js",
+    "dev": "npx tsx src/cli.ts"
+  },
+  "keywords": ["wechat", "miniprogram", "devtools", "cli", "automation"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "miniprogram-automator": "^0.12.1",
+    "chalk": "^5.3.0",
+    "minimist": "^1.2.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "@types/minimist": "^1.2.5"
+  }
+}
