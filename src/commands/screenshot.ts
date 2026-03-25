@@ -16,7 +16,7 @@ export const screenshot: CommandDef = defineCommand({
     { name: 'path', type: 'string', description: '保存路径（默认 ./screenshot.png）' },
   ],
   handler: async (args, ctx) => {
-    ctx.ensurePage();
+    ctx.ensureConnected();
 
     const savePath = args.path || './screenshot.png';
     const absPath = path.resolve(savePath);
@@ -28,7 +28,8 @@ export const screenshot: CommandDef = defineCommand({
         fs.mkdirSync(dir, { recursive: true });
       }
 
-      await ctx.currentPage!.screenshot({ path: absPath });
+      // screenshot 是 miniProgram 的方法，不是 page 的
+      await ctx.miniProgram!.screenshot({ path: absPath });
       const stat = fs.statSync(absPath);
       const sizeKb = (stat.size / 1024).toFixed(1);
 

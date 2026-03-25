@@ -8,21 +8,20 @@ import * as out from '../utils/output.js';
 
 export const evaluateScript: CommandDef = defineCommand({
   name: 'evaluate_script',
-  description: '在小程序页面中执行 JavaScript 代码',
+  description: '在小程序中执行 JavaScript 代码',
   category: '脚本执行',
   args: [
     { name: 'script', type: 'string', required: true, description: '要执行的 JavaScript 代码' },
-    { name: 'params', type: 'json', description: '传递给脚本的参数 (JSON)' },
   ],
   handler: async (args, ctx) => {
-    ctx.ensurePage();
+    ctx.ensureConnected();
 
     try {
-      const fn = args.params
-        ? `(params) => { ${args.script} }`
-        : `() => { ${args.script} }`;
-
-      const result = await ctx.currentPage!.callFunction(fn, args.params);
+      // miniProgram.evaluate 接受函数，但我们需要执行用户提供的字符串
+      // 构造一个 Function 来执行
+      const wrappedScript = `return (function() { ${args.script} })()`;
+      const fn = new Function(wrappedScript);
+      const result = await ctx.miniProgram!.evaluate(fn);
 
       if (result === undefined || result === null) {
         return out.success('执行完成 (无返回值)');

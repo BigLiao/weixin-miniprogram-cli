@@ -41,6 +41,10 @@ export class SharedContext {
   consoleListening: boolean = false;
   networkListening: boolean = false;
   lastConnectionParams: Record<string, any> | null = null;
+  /** IDE CLI 路径（用户手动设置或自动检测） */
+  cliPath: string | null = null;
+  /** 默认项目路径（来自 connect_devtools 或 config 设置） */
+  defaultProject: string | null = null;
   private consoleMsgId: number = 0;
   private networkReqId: number = 0;
 

@@ -14,6 +14,8 @@ import { networkCommands } from './network.js';
 import { screenshotCommands } from './screenshot.js';
 import { scriptCommands } from './script.js';
 import { diagnoseCommands } from './diagnose.js';
+import { ideCommands } from './ide.js';
+import { configCommands } from './config.js';
 
 export const allCommands: CommandDef[] = [
   ...connectionCommands,
@@ -27,4 +29,6 @@ export const allCommands: CommandDef[] = [
   ...screenshotCommands,
   ...scriptCommands,
   ...diagnoseCommands,
+  ...ideCommands,
+  ...configCommands,
 ];

@@ -1,6 +1,6 @@
 /**
  * 连接管理命令组 (4个)
- * connect_devtools, reconnect_devtools, disconnect_devtools, get_connection_status
+ * connect_devtools, reconnect_devtools, disconnect_devtools, status
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -32,46 +32,63 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
     logs.push(`Console 监听启动失败: ${e.message}`);
   }
 
-  // 自动启动 Network 监听（通过 JS 注入）
+  // 自动启动 Network 监听（通过 miniProgram.evaluate 注入拦截器）
   try {
-    if (ctx.currentPage && !ctx.networkListening) {
-      await ctx.currentPage.callFunction(`() => {
-        if (wx.__networkIntercepted) return;
+    if (ctx.miniProgram && !ctx.networkListening) {
+      await ctx.miniProgram.evaluate(function() {
+        // @ts-ignore
+        if (typeof wx === 'undefined' || wx.__networkIntercepted) return;
+        // @ts-ignore
         wx.__networkIntercepted = true;
+        // @ts-ignore
         wx.__networkLogs = wx.__networkLogs || [];
 
+        // @ts-ignore
         const origRequest = wx.request;
-        wx.request = function(options) {
-          const entry = {
-            type: 'request',
-            method: options.method || 'GET',
-            url: options.url,
-            requestData: options.data,
-            requestHeader: options.header,
-            timestamp: Date.now(),
-            success: false
-          };
-          wx.__networkLogs.push(entry);
+        // @ts-ignore
+        delete wx.request;
+        // @ts-ignore
+        Object.defineProperty(wx, 'request', {
+          configurable: true,
+          value: function(options: any) {
+            const start = Date.now();
+            const entry = {
+              type: 'request',
+              method: options.method || 'GET',
+              url: options.url,
+              requestData: options.data,
+              requestHeader: options.header,
+              timestamp: Date.now(),
+              success: false,
+              statusCode: 0,
+              responseData: null,
+              responseHeader: null,
+              errMsg: '',
+              duration: 0
+            };
+            // @ts-ignore
+            wx.__networkLogs.push(entry);
 
-          const origSuccess = options.success;
-          const origFail = options.fail;
-          options.success = function(res) {
-            entry.statusCode = res.statusCode;
-            entry.responseData = res.data;
-            entry.responseHeader = res.header;
-            entry.success = true;
-            entry.duration = Date.now() - entry.timestamp;
-            origSuccess && origSuccess(res);
-          };
-          options.fail = function(err) {
-            entry.success = false;
-            entry.errMsg = err.errMsg;
-            entry.duration = Date.now() - entry.timestamp;
-            origFail && origFail(err);
-          };
-          return origRequest.call(this, options);
-        };
-      }`);
+            const origSuccess = options.success;
+            const origFail = options.fail;
+            options.success = function(res: any) {
+              entry.statusCode = res.statusCode;
+              entry.responseData = res.data;
+              entry.responseHeader = res.header;
+              entry.success = true;
+              entry.duration = Date.now() - start;
+              if (origSuccess) origSuccess.call(this, res);
+            };
+            options.fail = function(err: any) {
+              entry.success = false;
+              entry.errMsg = err.errMsg || String(err);
+              entry.duration = Date.now() - start;
+              if (origFail) origFail.call(this, err);
+            };
+            return origRequest.call(this, options);
+          }
+        });
+      });
       ctx.networkListening = true;
       logs.push('Network 监听已自动启动');
     }
@@ -126,6 +143,11 @@ export const connectDevtools: CommandDef = defineCommand({
       ctx.miniProgram = mp;
       ctx.currentPage = await mp.currentPage();
       ctx.lastConnectionParams = args;
+
+      // 记住项目路径，供自动重连使用
+      if (args.project) {
+        ctx.defaultProject = args.project;
+      }
 
       const elapsed = Date.now() - startTime;
       lines.push(out.success(`连接成功 (${elapsed}ms)`));
@@ -194,7 +216,7 @@ export const disconnectDevtools: CommandDef = defineCommand({
 });
 
 export const getConnectionStatus: CommandDef = defineCommand({
-  name: 'get_connection_status',
+  name: 'status',
   description: '获取当前连接状态',
   category: '连接管理',
   args: [

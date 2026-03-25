@@ -5,65 +5,68 @@
  */
 
 import { ElementMapInfo } from '../context.js';
+import { type WxmlNode } from './wxml-parser.js';
+
+/** 需要跳过的无意义容器标签（不生成 UID） */
+const SKIP_TAGS = new Set(['page', 'body']);
 
 /**
- * 从 WXML 节点树生成 UID 映射
- * @param nodes - 页面 WXML 节点树
+ * 从 WxmlNode 树生成 UID 映射
+ * @param nodes - 解析后的 WXML 节点树
  * @returns UID → ElementMapInfo 映射
  */
-export function buildElementMap(nodes: any[]): Map<string, ElementMapInfo> {
+export function buildElementMap(nodes: WxmlNode[]): Map<string, ElementMapInfo> {
   const map = new Map<string, ElementMapInfo>();
   const selectorCount = new Map<string, number>();
 
-  function walk(node: any, parentPath: string = ''): void {
+  function walk(node: WxmlNode): void {
     if (!node || !node.tagName) return;
 
-    const selector = buildSelector(node, parentPath);
-    const count = selectorCount.get(selector) || 0;
-    selectorCount.set(selector, count + 1);
+    // 跳过 page/body 容器
+    if (!SKIP_TAGS.has(node.tagName)) {
+      const selector = buildSelectorFromWxml(node);
+      const count = selectorCount.get(selector) || 0;
+      selectorCount.set(selector, count + 1);
 
-    const uid = count > 0 ? `${selector}[${count}]` : selector;
-    map.set(uid, { selector, index: count });
+      const uid = count > 0 ? `${selector}[${count}]` : selector;
+      map.set(uid, { selector, index: count });
 
-    // 递归子节点
-    if (node.childNodes && Array.isArray(node.childNodes)) {
-      for (const child of node.childNodes) {
-        walk(child, selector);
-      }
+      // 将 uid 附加到节点上，方便格式化时使用
+      (node as any)._uid = uid;
     }
-    if (node.children && Array.isArray(node.children)) {
-      for (const child of node.children) {
-        walk(child, selector);
-      }
+
+    for (const child of node.children) {
+      walk(child);
     }
   }
 
-  if (Array.isArray(nodes)) {
-    for (const node of nodes) {
-      walk(node);
-    }
+  for (const node of nodes) {
+    walk(node);
   }
 
   return map;
 }
 
 /**
- * 构建单个元素的选择器
+ * 从 WxmlNode 构建选择器
  */
-function buildSelector(node: any, parentPath: string): string {
+function buildSelectorFromWxml(node: WxmlNode): string {
   const tag = node.tagName || 'view';
+  const id = node.attributes?.id;
+  const className = node.attributes?.class;
 
   // 优先用 id
-  if (node.id) {
-    return `#${node.id}`;
+  if (id) {
+    return `${tag}#${id}`;
   }
 
-  // 其次用有意义的 class
-  if (node.className) {
-    const classes = String(node.className).trim().split(/\s+/).filter(Boolean);
-    if (classes.length > 0) {
-      const cls = classes[0]; // 取第一个 class
-      return `${tag}.${cls}`;
+  // 其次用有意义的 class（取第一个非 bar--/icon--/search-- 前缀的 class）
+  if (className) {
+    const classes = className.trim().split(/\s+/).filter(Boolean);
+    // 过滤掉 BEM 修饰符前缀（如 bar--xxx, icon--xxx）
+    const meaningful = classes.find(c => !c.includes('--')) || classes[0];
+    if (meaningful) {
+      return `${tag}.${meaningful}`;
     }
   }
 
@@ -72,7 +75,69 @@ function buildSelector(node: any, parentPath: string): string {
 }
 
 /**
- * 格式化快照节点为紧凑文本
+ * 将 WxmlNode 树格式化为带 UID 标注的缩进树
+ *
+ * 输出示例:
+ * [view.container] <view class="container">
+ *   [text.title] <text class="title"> "Hello World"
+ *   [view.list] <view class="list">
+ *     [view.item] <view class="item"> "Item 1"
+ */
+export function formatSnapshotTree(
+  nodes: WxmlNode[],
+  options: { maxDepth?: number; maxElements?: number } = {},
+): string {
+  const { maxDepth = Infinity, maxElements = 500 } = options;
+  const lines: string[] = [];
+  let elementCount = 0;
+
+  function walk(node: WxmlNode, depth: number): void {
+    if (!node.tagName || elementCount >= maxElements) return;
+
+    const indent = '  '.repeat(depth);
+    const uid = (node as any)._uid as string | undefined;
+
+    // 跳过 page/body 容器，但继续遍历子节点
+    if (SKIP_TAGS.has(node.tagName)) {
+      for (const child of node.children) {
+        walk(child, depth);
+      }
+      return;
+    }
+
+    elementCount++;
+
+    const textPart = node.text ? ` "${truncateText(node.text, 40)}"` : '';
+    const uidPart = uid ? `[${uid}]` : '';
+
+    lines.push(`${indent}${uidPart}${textPart}`);
+
+    // 深度限制
+    if (depth >= maxDepth) {
+      if (node.children.length > 0) {
+        lines.push(`${indent}  ... (${node.children.length} children)`);
+      }
+      return;
+    }
+
+    for (const child of node.children) {
+      walk(child, depth + 1);
+    }
+  }
+
+  for (const node of nodes) {
+    walk(node, 0);
+  }
+
+  if (elementCount >= maxElements) {
+    lines.push(`  ... (已达 ${maxElements} 个元素上限)`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * 格式化快照节点为紧凑文本（旧版兼容）
  */
 export function formatSnapshotCompact(node: any, depth: number = 0): string {
   if (!node) return '';

@@ -48,7 +48,7 @@ export const querySelector: CommandDef = defineCommand({
     const lines = [out.success(`找到元素: ${args.selector}`)];
 
     try {
-      const tagName = await el.tagName();
+      const tagName = el.tagName;
       lines.push(`  标签: ${tagName}`);
     } catch {}
 

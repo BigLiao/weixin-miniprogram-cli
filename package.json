@@ -8,7 +8,7 @@
     "wx-cli": "./build/cli.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x build/cli.js",
+    "build": "tsc && chmod +x build/cli.js build/daemon.js",
     "watch": "tsc --watch",
     "start": "node build/cli.js",
     "dev": "npx tsx src/cli.ts",
@@ -24,7 +24,9 @@
     "test:console": "node examples/test-scripts/test-console.mjs",
     "test:network": "node examples/test-scripts/test-network.mjs",
     "test:screenshot": "node examples/test-scripts/test-screenshot-script.mjs",
-    "test:diagnose": "node examples/test-scripts/test-diagnose.mjs"
+    "test:diagnose": "node examples/test-scripts/test-diagnose.mjs",
+    "test:launch": "node examples/test-scripts/test-launch.mjs",
+    "test:launch:skip-login": "node examples/test-scripts/test-launch.mjs --skip-login"
   },
   "keywords": [
     "wechat",

@@ -7,17 +7,22 @@ import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
 /**
- * 从小程序端同步网络日志
+ * 从小程序端同步网络日志（通过 miniProgram.evaluate）
  */
 async function syncNetworkLogs(ctx: any): Promise<void> {
-  if (!ctx.currentPage) return;
+  if (!ctx.miniProgram) return;
 
   try {
-    const remoteLogs = await ctx.currentPage.callFunction(`() => {
-      const logs = wx.__networkLogs || [];
-      const result = JSON.parse(JSON.stringify(logs));
-      return result;
-    }`);
+    const remoteLogs = await ctx.miniProgram.evaluate(function() {
+      // @ts-ignore
+      const logs = typeof wx !== 'undefined' && wx.__networkLogs ? wx.__networkLogs : [];
+      // 序列化后返回（避免循环引用）
+      try {
+        return JSON.parse(JSON.stringify(logs));
+      } catch {
+        return [];
+      }
+    });
 
     if (Array.isArray(remoteLogs)) {
       // 合并新日志
@@ -190,10 +195,14 @@ export const stopNetworkMonitoring: CommandDef = defineCommand({
     }
 
     try {
-      if (ctx.currentPage) {
-        await ctx.currentPage.callFunction(`() => {
-          wx.__networkIntercepted = false;
-        }`);
+      if (ctx.miniProgram) {
+        await ctx.miniProgram.evaluate(function() {
+          // @ts-ignore
+          if (typeof wx !== 'undefined') {
+            // @ts-ignore
+            wx.__networkIntercepted = false;
+          }
+        });
       }
     } catch {}
 
@@ -219,11 +228,15 @@ export const clearNetworkRequests: CommandDef = defineCommand({
     const count = ctx.networkRequests.length;
     ctx.networkRequests = [];
 
-    if (args.clearRemote && ctx.currentPage) {
+    if (args.clearRemote && ctx.miniProgram) {
       try {
-        await ctx.currentPage.callFunction(`() => {
-          wx.__networkLogs = [];
-        }`);
+        await ctx.miniProgram.evaluate(function() {
+          // @ts-ignore
+          if (typeof wx !== 'undefined') {
+            // @ts-ignore
+            wx.__networkLogs = [];
+          }
+        });
       } catch {}
     }
 
