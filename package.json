@@ -1,11 +1,11 @@
 {
-  "name": "wx-devtools-cli",
+  "name": "mp-cli",
   "version": "0.1.0",
   "description": "微信开发者工具交互式 CLI 控制器",
   "type": "module",
   "main": "build/cli.js",
   "bin": {
-    "wx-devtools-cli": "./build/cli.js"
+    "mp-cli": "./build/cli.js"
   },
   "scripts": {
     "build": "tsc && chmod +x build/cli.js build/daemon.js",

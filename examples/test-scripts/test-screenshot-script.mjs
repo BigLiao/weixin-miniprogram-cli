@@ -14,7 +14,7 @@ async function main() {
   console.log('   已连接\n');
 
   await describe('screenshot', async () => {
-    const path = '/tmp/wx-devtools-cli-test-screenshot.png';
+    const path = '/tmp/mp-cli-test-screenshot.png';
     try { unlinkSync(path); } catch {}
 
     const result = await run('screenshot', { path });

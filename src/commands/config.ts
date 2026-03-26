@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const CONFIG_FILE = join(homedir(), '.wx-devtools-cli-config.json');
+const CONFIG_FILE = join(homedir(), '.mp-cli-config.json');
 
 export interface CliConfig {
   cliPath?: string;

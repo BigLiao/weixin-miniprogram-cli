@@ -1,5 +1,5 @@
 /**
- * wx-devtools-cli IPC 客户端
+ * mp-cli IPC 客户端
  * 与 daemon 进程通信
  */
 

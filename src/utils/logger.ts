@@ -6,7 +6,7 @@
  *   - CLI 参数: --debug
  *
  * 日志同时写到 stderr（带颜色）和文件（纯文本）。
- * 文件路径: /tmp/wx-devtools-cli.log
+ * 文件路径: /tmp/mp-cli.log
  *
  * 级别: debug < info < warn < error
  * 默认级别: 关闭时 warn，开启时 debug
