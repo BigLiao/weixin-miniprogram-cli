@@ -132,3 +132,60 @@ export class SharedContext {
     this.networkReqId = 0;
   }
 }
+
+// ==================== Session（多 session 架构）====================
+
+export type SessionStatus = 'connected' | 'disconnected' | 'dead';
+
+/**
+ * Session 继承 SharedContext，对命令层完全透明。
+ * 每个 Session 对应一个小程序连接实例。
+ */
+export class Session extends SharedContext {
+  readonly id: string;
+  status: SessionStatus = 'disconnected';
+  readonly createdAt: number = Date.now();
+  lastActiveAt: number = Date.now();
+
+  constructor(id: string) {
+    super();
+    this.id = id;
+  }
+
+  /** 更新活跃时间 */
+  touch(): void {
+    this.lastActiveAt = Date.now();
+  }
+
+  /** 重置状态并标记为 disconnected */
+  override reset(): void {
+    super.reset();
+    this.status = 'disconnected';
+  }
+
+  /** 标记为 dead（连接已不可恢复） */
+  markDead(): void {
+    this.status = 'dead';
+    this.miniProgram = null;
+    this.currentPage = null;
+  }
+
+  /** 返回 session 概要信息 */
+  toSummary(): {
+    id: string;
+    status: SessionStatus;
+    currentPage: string | null;
+    elementMapSize: number;
+    idleMs: number;
+    createdAt: number;
+  } {
+    return {
+      id: this.id,
+      status: this.status,
+      currentPage: this.currentPage?.path || null,
+      elementMapSize: this.elementMap.size,
+      idleMs: Date.now() - this.lastActiveAt,
+      createdAt: this.createdAt,
+    };
+  }
+}

@@ -11,12 +11,12 @@ import { homedir } from 'os';
 
 const CONFIG_FILE = join(homedir(), '.wx-devtools-cli-config.json');
 
-interface CliConfig {
+export interface CliConfig {
   cliPath?: string;
   defaultProject?: string;
 }
 
-function loadConfig(): CliConfig {
+export function loadConfig(): CliConfig {
   try {
     if (existsSync(CONFIG_FILE)) {
       return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));

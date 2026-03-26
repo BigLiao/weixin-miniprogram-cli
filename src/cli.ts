@@ -229,6 +229,8 @@ function buildExample(cmd: CommandDef): string {
 interface ResolvedCommand {
   cmd: CommandDef;
   args: Record<string, any>;
+  /** IPC 层 session 标识（--session 参数，不属于命令 args） */
+  sessionId?: string;
 }
 
 /**
@@ -271,11 +273,15 @@ function resolveCommand(input: string, options?: { silent?: boolean }): Resolved
     }
   }
 
-  // 3. 清理 _positional，做类型转换
+  // 3. 提取 IPC 层 session 标识（在 coerceArgs 前，否则会被丢弃）
+  const sessionId = finalArgs.session || undefined;
+  delete finalArgs.session;
+
+  // 4. 清理 _positional，做类型转换
   delete finalArgs._positional;
   const coerced = coerceArgs(finalArgs, cmd.args);
 
-  return { cmd, args: coerced };
+  return { cmd, args: coerced, sessionId };
 }
 
 // ==================== Daemon 模式命令执行 ====================
@@ -293,9 +299,11 @@ async function executeDaemonCommand(input: string): Promise<void> {
   }
   if (!resolved) return;
 
+  const sessionId = resolved.sessionId || process.env.WX_SESSION || undefined;
+
   try {
-    logger.debug(`sendCommand: ${resolved.cmd.name}`, resolved.args);
-    const resp = await sendCommand(resolved.cmd.name, resolved.args);
+    logger.debug(`sendCommand: ${resolved.cmd.name}`, resolved.args, sessionId ? `session=${sessionId}` : '');
+    const resp = await sendCommand(resolved.cmd.name, resolved.args, undefined, sessionId);
     logger.debug(`response: ok=${resp.ok}`, resp.ok ? '' : resp.error);
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
@@ -524,12 +532,18 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
           const resp = await sendCommand('__status');
           if (resp.ok && resp.output) {
             const status = JSON.parse(resp.output);
-            console.log(`  连接状态: ${status.connected ? '已连接' : '未连接'}`);
-            if (status.currentPage) console.log(`  当前页面: ${status.currentPage}`);
-            console.log(`  元素映射: ${status.elementMapSize} 个`);
-            console.log(`  Console: ${status.consoleMessages} 条`);
-            console.log(`  Network: ${status.networkRequests} 条`);
             console.log(`  运行时间: ${status.uptime}s`);
+            console.log(`  活跃 session: ${status.activeSession || '(无)'}`);
+            if (status.sessions && status.sessions.length > 0) {
+              console.log(`  Session 列表 (${status.sessions.length}):`);
+              for (const s of status.sessions) {
+                const icon = s.status === 'connected' ? '●' : s.status === 'dead' ? '✖' : '○';
+                const active = s.id === status.activeSession ? ' ★' : '';
+                console.log(`    ${icon} ${s.id}${active}  ${s.status}  page=${s.currentPage || '-'}`);
+              }
+            } else {
+              console.log('  没有活跃的 session');
+            }
           }
         } catch {}
       } else {
@@ -599,9 +613,13 @@ if (argv[0] === 'connect' && argv.length >= 2) {
         console.log(out.dim(`  daemon 已在运行 (PID: ${pid})`));
       }
 
+      // 提取 --session 参数
+      const sessionId = extraArgs.session || process.env.WX_SESSION || undefined;
+      delete extraArgs.session;  // session 是 IPC 层面的
+
       // 发送连接命令
       const connectArgs = { project: projectPath, ...extraArgs };
-      const resp = await sendCommand('connect', connectArgs);
+      const resp = await sendCommand('connect', connectArgs, undefined, sessionId);
       if (resp.ok) {
         if (resp.output) console.log(resp.output);
       } else {
@@ -615,23 +633,44 @@ if (argv[0] === 'connect' && argv.length >= 2) {
   })();
 
 } else if (argv[0] === 'disconnect') {
-  // ======= wx-devtools-cli disconnect =======
+  // ======= wx-devtools-cli disconnect [--session <id>] =======
   (async () => {
     const running = await isDaemonRunning();
     if (!running) {
       console.log(out.warn('daemon 未运行'));
       process.exit(0);
     }
-    const resp = await sendCommand('disconnect', {});
+
+    // 复用 resolveCommand 解析（提取 --session 等参数）
+    const input = argv.join(' ');
+    const resolved = resolveCommand(input, { silent: true });
+    const sessionId = resolved?.sessionId || process.env.WX_SESSION || undefined;
+    const cmdArgs = resolved?.args || {};
+
+    const resp = await sendCommand('disconnect', cmdArgs, undefined, sessionId);
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
     } else {
       console.log(out.error(resp.error || '断开失败'));
     }
-    // 断开后自动停止 daemon
-    logger.debug('断开后自动停止 daemon');
-    await stopDaemon();
-    console.log(out.dim('  daemon 已停止'));
+
+    // 检查是否还有活跃 session，没有则停止 daemon
+    try {
+      const statusResp = await sendCommand('__status');
+      if (statusResp.ok && statusResp.output) {
+        const status = JSON.parse(statusResp.output);
+        const hasAlive = (status.sessions || []).some(
+          (s: any) => s.status === 'connected' || s.status === 'disconnected'
+        );
+        if (!hasAlive) {
+          logger.debug('无活跃 session，停止 daemon');
+          await stopDaemon();
+          console.log(out.dim('  daemon 已停止'));
+        }
+      }
+    } catch {
+      // 忽略状态查询失败
+    }
   })();
 
 } else if (argv[0] === 'daemon' && argv.length >= 2) {

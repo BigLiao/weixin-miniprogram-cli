@@ -2,18 +2,18 @@
 
 /**
  * wx-devtools-cli Daemon 服务
- * 后台进程，通过 Unix Socket 接收命令，持有 miniProgram 连接和状态
+ * 后台进程，通过 Unix Socket 接收命令，管理多个 session（小程序连接）
  */
 
 import * as net from 'net';
 import * as fs from 'fs';
-import * as path from 'path';
-import { SharedContext } from './context.js';
 import { registry } from './registry.js';
 import { coerceArgs } from './parser.js';
 import { allCommands } from './commands/index.js';
-import { loadPersistedConfig } from './commands/config.js';
-import * as out from './utils/output.js';
+import { loadConfig, type CliConfig } from './commands/config.js';
+import { SessionManager } from './session-manager.js';
+import { createSessionCommands } from './commands/session.js';
+import { Session } from './context.js';
 import { logger } from './utils/logger.js';
 
 // ==================== 常量 ====================
@@ -23,6 +23,9 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 分钟空闲自动退出
 const COMMAND_TIMEOUT_MS = 120_000;      // 单条命令最长 2 分钟
 const SHUTDOWN_TIMEOUT_MS = 10_000;      // 优雅关闭最长 10 秒
 const MAX_BUFFER_SIZE = 1024 * 1024;     // 客户端 buffer 最大 1MB
+
+/** 不需要 resolve session 的命令（session 管理命令通过闭包捕获 sessionMgr） */
+const SESSION_META_COMMANDS = new Set(['list_sessions', 'switch_session']);
 
 // ==================== 初始化 ====================
 
@@ -34,14 +37,19 @@ if (!debugMode) {
   logger.setLevel('info');
 }
 
-// 注册所有命令
+// 注册所有命令（含 session 占位命令）
 registry.registerAll(allCommands);
 
-// 全局共享上下文
-const ctx = new SharedContext();
+// 创建 SessionManager
+const sessionMgr = new SessionManager();
 
-// 加载持久化配置
-loadPersistedConfig(ctx);
+// 全局配置（不属于单个 session，从持久化文件加载）
+const globalConfig: CliConfig = loadConfig();
+
+// 用工厂创建的真实 session 命令覆盖占位
+for (const cmd of createSessionCommands(sessionMgr)) {
+  registry.register(cmd);
+}
 
 // 空闲计时器
 let idleTimer: NodeJS.Timeout | null = null;
@@ -60,17 +68,57 @@ function resetIdleTimer(): void {
   }, IDLE_TIMEOUT_MS);
 }
 
+/**
+ * 将全局配置复制到 session 上（connect 时调用）
+ */
+function applyGlobalConfig(session: Session): void {
+  if (globalConfig.cliPath) session.cliPath = globalConfig.cliPath;
+  if (globalConfig.defaultProject) session.defaultProject = globalConfig.defaultProject;
+}
+
 // ==================== 请求处理 ====================
 
 interface DaemonRequest {
   command: string;
   args: Record<string, any>;
+  session?: string;
 }
 
 interface DaemonResponse {
   ok: boolean;
   output?: string;
   error?: string;
+}
+
+/**
+ * 为请求解析 session 上下文。
+ * 返回 Session 实例，或 null（表示该命令不需要 session）。
+ */
+function resolveSessionForRequest(command: string, reqSession?: string): Session | null {
+  // session 管理命令通过闭包访问 sessionMgr，不需要 ctx
+  if (SESSION_META_COMMANDS.has(command)) {
+    return null;
+  }
+
+  if (command === 'connect') {
+    let session: Session;
+    if (reqSession && sessionMgr.get(reqSession)) {
+      // 显式指定且已存在 → 复用（reconnect 场景）
+      session = sessionMgr.get(reqSession)!;
+    } else {
+      // 创建新 session
+      session = sessionMgr.create(reqSession || undefined);
+    }
+    // 首个 session 或无活跃 session 时自动设为活跃
+    if (!sessionMgr.activeId) {
+      sessionMgr.setActive(session.id);
+    }
+    applyGlobalConfig(session);
+    return session;
+  }
+
+  // 其他命令：resolve
+  return sessionMgr.resolve(reqSession);
 }
 
 async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
@@ -86,24 +134,23 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
       setTimeout(() => gracefulShutdown(), 100);
       return { ok: true, output: 'daemon 正在关闭' };
 
-    case '__status':
+    case '__status': {
+      const sessions = sessionMgr.getAll().map(s => s.toSummary());
       return {
         ok: true,
         output: JSON.stringify({
           pid: process.pid,
-          connected: !!ctx.miniProgram,
-          currentPage: ctx.currentPage?.path || null,
-          elementMapSize: ctx.elementMap.size,
-          consoleMessages: ctx.consoleMessages.length,
-          networkRequests: ctx.networkRequests.length,
           uptime: Math.floor(process.uptime()),
+          activeSession: sessionMgr.activeId,
+          sessions,
         }),
       };
+    }
   }
 
   // 查找注册命令
-  let cmd = registry.get(command);
-  let finalArgs = { ...args };
+  const cmd = registry.get(command);
+  const finalArgs = { ...args };
 
   if (!cmd) {
     logger.warn(`未知命令: ${command}`);
@@ -119,22 +166,61 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
         resolve({ ok: false, error: `命令超时 (${COMMAND_TIMEOUT_MS}ms): ${command}` });
       }, COMMAND_TIMEOUT_MS);
 
+      // 在 try 外部声明 ctx，catch 中也能访问
+      let ctx: Session | null = null;
+
       try {
-        logger.debug(`exec: ${command}`, finalArgs);
-        const coerced = coerceArgs(finalArgs, cmd!.args);
-        const result = await cmd!.handler(coerced, ctx);
+        ctx = resolveSessionForRequest(command, req.session);
+
+        if (ctx) ctx.touch();
+
+        const sessionLabel = ctx ? ` [session=${ctx.id}]` : '';
+        logger.debug(`exec: ${command}${sessionLabel}`, finalArgs);
+
+        const coerced = coerceArgs(finalArgs, cmd.args);
+        const result = await cmd.handler(coerced, ctx as any);
+
         clearTimeout(timer);
-        const elapsed = Date.now() - startTime;
-        logger.debug(`done: ${command}`, `(${elapsed}ms)`);
+        logger.debug(`done: ${command}${sessionLabel}`, `(${Date.now() - startTime}ms)`);
+
+        // connect 成功后标记 connected
+        if (command === 'connect' && ctx?.miniProgram) {
+          ctx.status = 'connected';
+        }
+
+        // disconnect 后标记 disconnected（session 保留在 map 中）
+        if (command === 'disconnect' && ctx) {
+          ctx.status = 'disconnected';
+        }
+
         resolve({ ok: true, output: result || '' });
       } catch (e: any) {
         clearTimeout(timer);
-        const elapsed = Date.now() - startTime;
-        logger.error(`fail: ${command}`, `(${elapsed}ms)`, e.message);
+        logger.error(`fail: ${command}`, `(${Date.now() - startTime}ms)`, e.message);
+
+        // 检测连接断开错误，标记 dead
+        if (ctx && ctx.status === 'connected' && isConnectionError(e)) {
+          ctx.markDead();
+          logger.warn(`Session ${ctx.id} 已标记为 dead`);
+        }
+
         resolve({ ok: false, error: e.message });
       }
     });
   });
+}
+
+/**
+ * 判断是否为连接断开类错误
+ */
+function isConnectionError(e: any): boolean {
+  const msg = (e.message || '').toLowerCase();
+  return msg.includes('disconnected') ||
+    msg.includes('not connected') ||
+    msg.includes('connection') ||
+    msg.includes('econnrefused') ||
+    msg.includes('socket hang up') ||
+    msg.includes('websocket');
 }
 
 // ==================== Socket 服务 ====================
@@ -189,7 +275,8 @@ function startServer(): void {
         }
 
         const argsStr = Object.keys(req.args || {}).length > 0 ? JSON.stringify(req.args) : '';
-        logger.info(`← ${req.command}`, argsStr);
+        const sessionStr = req.session ? ` [session=${req.session}]` : '';
+        logger.info(`← ${req.command}${sessionStr}`, argsStr);
 
         handleRequest(req).then((resp) => {
           logger.info(`→ ${resp.ok ? 'ok' : 'err'}`, resp.ok ? '' : (resp.error || ''));
@@ -252,19 +339,9 @@ async function gracefulShutdown(): Promise<void> {
   // 清除空闲计时器
   if (idleTimer) clearTimeout(idleTimer);
 
-  // 断开 miniProgram 连接（带超时）
-  if (ctx.miniProgram) {
-    try {
-      await Promise.race([
-        ctx.miniProgram.disconnect(),
-        new Promise(r => setTimeout(r, 5000)),
-      ]);
-      logger.info('miniProgram 连接已断开');
-    } catch {
-      // 忽略
-    }
-    ctx.reset();
-  }
+  // 断开所有 session 连接
+  await sessionMgr.disconnectAll();
+  logger.info('所有 session 连接已断开');
 
   // 关闭 socket 服务
   const server = (globalThis as any).__wxDaemonServer;

@@ -52,6 +52,7 @@ export function sendCommand(
   command: string,
   args: Record<string, any> = {},
   timeout: number = COMMAND_TIMEOUT_MS,
+  session?: string,
 ): Promise<DaemonResponse> {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(SOCKET_PATH);
@@ -67,7 +68,7 @@ export function sendCommand(
     }, timeout);
 
     socket.on('connect', () => {
-      const req = JSON.stringify({ command, args }) + '\n';
+      const req = JSON.stringify({ command, args, ...(session ? { session } : {}) }) + '\n';
       socket.write(req);
     });
 
