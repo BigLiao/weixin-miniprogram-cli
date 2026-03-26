@@ -4,9 +4,9 @@
  * wx-devtools-cli - 微信开发者工具交互式 CLI 控制器
  *
  * 支持三种模式：
- * 1. wx-cli connect <path>      — 启动 daemon + 连接（daemon 模式）
- * 2. wx-cli <command> [args]    — 通过 daemon 或本地执行
- * 3. wx-cli --repl              — 传统 REPL 模式（向后兼容）
+ * 1. wx-devtools-cli connect <path>      — 启动 daemon + 连接（daemon 模式）
+ * 2. wx-devtools-cli <command> [args]    — 通过 daemon 或本地执行
+ * 3. wx-devtools-cli --repl              — 传统 REPL 模式（向后兼容）
  */
 
 import * as readline from 'readline';
@@ -32,7 +32,7 @@ registry.registerAll(allCommands);
 // 全局共享上下文（仅 REPL 模式使用）
 const ctx = new SharedContext();
 
-// 加载持久化配置（~/.wx-cli-config.json）
+// 加载持久化配置（~/.wx-devtools-cli-config.json）
 loadPersistedConfig(ctx);
 
 // ==================== 命令分类 ====================
@@ -106,10 +106,10 @@ function showHelp(cmdName?: string): string {
   lines.push(`    ${chalk.cyan('clear'.padEnd(28))} ${chalk.dim('清屏')}`);
   lines.push(`    ${chalk.cyan('history'.padEnd(28))} ${chalk.dim('显示命令历史')}`);
   lines.push('');
-  lines.push(chalk.dim('  示例: wx-cli connect /path/to/project'));
-  lines.push(chalk.dim('  示例: wx-cli get_page_snapshot'));
-  lines.push(chalk.dim('  示例: wx-cli click --uid "button.submit"'));
-  lines.push(chalk.dim('  示例: wx-cli ide open --project /path'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/to/project'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli get_page_snapshot'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli click --uid "button.submit"'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli ide open --project /path'));
   lines.push('');
 
   return lines.join('\n');
@@ -478,7 +478,7 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
         } catch {}
       } else {
         console.log(out.warn('daemon 未运行'));
-        console.log(out.dim('  使用 wx-cli connect <project> 启动'));
+        console.log(out.dim('  使用 wx-devtools-cli connect <project> 启动'));
       }
       break;
     }
@@ -506,7 +506,7 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
 const argv = process.argv.slice(2);
 
 if (argv[0] === 'connect' && argv.length >= 2) {
-  // ======= wx-cli connect <project_path> [options...] =======
+  // ======= wx-devtools-cli connect <project_path> [options...] =======
   // 启动 daemon（如果没运行），然后发送 connect_devtools 命令
   const projectPath = argv[1];
   const restArgs = argv.slice(2);
@@ -556,7 +556,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
   })();
 
 } else if (argv[0] === 'disconnect') {
-  // ======= wx-cli disconnect =======
+  // ======= wx-devtools-cli disconnect =======
   (async () => {
     const running = await isDaemonRunning();
     if (!running) {
@@ -572,22 +572,22 @@ if (argv[0] === 'connect' && argv.length >= 2) {
   })();
 
 } else if (argv[0] === 'daemon' && argv.length >= 2) {
-  // ======= wx-cli daemon <status|stop> =======
+  // ======= wx-devtools-cli daemon <status|stop> =======
   handleDaemonSubcommand(argv[1]);
 
 } else if (argv[0] === '--repl') {
-  // ======= wx-cli --repl =======
+  // ======= wx-devtools-cli --repl =======
   // REPL 交互模式
   startRepl();
 
 } else if (argv.length === 0) {
-  // ======= wx-cli =======
+  // ======= wx-devtools-cli =======
   // 无参数：打印帮助信息
   console.log(showHelp());
   process.exit(0);
 
 } else {
-  // ======= wx-cli <command> [args] =======
+  // ======= wx-devtools-cli <command> [args] =======
   // 判断是本地命令还是需要 daemon
   const input = argv.join(' ');
   const { command, args } = parseCommand(input);
@@ -616,7 +616,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
     (async () => {
       const running = await isDaemonRunning();
       if (!running) {
-        console.log(out.error('daemon 未运行，请先执行 wx-cli connect <project_path>'));
+        console.log(out.error('daemon 未运行，请先执行 wx-devtools-cli connect <project_path>'));
         process.exit(1);
       }
 

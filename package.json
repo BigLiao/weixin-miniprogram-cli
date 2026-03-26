@@ -5,7 +5,7 @@
   "type": "module",
   "main": "build/cli.js",
   "bin": {
-    "wx-cli": "./build/cli.js"
+    "wx-devtools-cli": "./build/cli.js"
   },
   "scripts": {
     "build": "tsc && chmod +x build/cli.js build/daemon.js",

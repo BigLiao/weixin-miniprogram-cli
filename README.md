@@ -25,33 +25,33 @@ npm run build
 
 ```bash
 # 连接项目（启动后台 daemon 并连接）
-wx-cli connect /path/to/your/miniprogram
+wx-devtools-cli connect /path/to/your/miniprogram
 
 # 执行命令（每条都是独立的终端命令）
-wx-cli get_page_snapshot
-wx-cli click --uid "button.submit"
-wx-cli screenshot --path ./shot.png
-wx-cli switch_tab --url pages/message/index
+wx-devtools-cli get_page_snapshot
+wx-devtools-cli click --uid "button.submit"
+wx-devtools-cli screenshot --path ./shot.png
+wx-devtools-cli switch_tab --url pages/message/index
 
 # 断开连接
-wx-cli disconnect
+wx-devtools-cli disconnect
 
 # 停止后台 daemon
-wx-cli daemon stop
+wx-devtools-cli daemon stop
 ```
 
 ## 架构
 
 ```
 ┌──────────────┐  Unix Socket   ┌──────────────────────────┐
-│  wx-cli CMD  │ ──────────────▶│  daemon (后台进程)         │
+│  wx-devtools-cli CMD  │ ──────────────▶│  daemon (后台进程)         │
 │  (独立命令)   │◀────────────── │  - 持有 miniProgram 连接   │
 └──────────────┘    JSON        │  - 维护 elementMap/状态    │
                                 │  - 监听 console/network    │
                                 └──────────────────────────┘
 ```
 
-`wx-cli connect` 会自动启动 daemon 进程，后续命令通过 Unix Socket 与 daemon 通信。连接状态、元素映射等都保持在 daemon 中，跨命令共享。
+`wx-devtools-cli connect` 会自动启动 daemon 进程，后续命令通过 Unix Socket 与 daemon 通信。连接状态、元素映射等都保持在 daemon 中，跨命令共享。
 
 ## 使用方式
 
@@ -59,18 +59,18 @@ wx-cli daemon stop
 
 ```bash
 # 1. 连接项目（自动启动 daemon）
-wx-cli connect examples/miniprogram-demo
+wx-devtools-cli connect examples/miniprogram-demo
 
 # 2. 执行任意命令
-wx-cli status
-wx-cli get_page_snapshot
-wx-cli click --uid "button.submit"
+wx-devtools-cli status
+wx-devtools-cli get_page_snapshot
+wx-devtools-cli click --uid "button.submit"
 
 # 3. 完成后断开
-wx-cli disconnect
+wx-devtools-cli disconnect
 
 # 4. 停止 daemon（可选，空闲 30 分钟会自动退出）
-wx-cli daemon stop
+wx-devtools-cli daemon stop
 ```
 
 适合 Claude Code、脚本调用等场景。
@@ -78,7 +78,7 @@ wx-cli daemon stop
 ### 方式二：REPL 交互模式
 
 ```bash
-wx-cli --repl
+wx-devtools-cli --repl
 ```
 
 进入交互式命令行，支持 Tab 补全、命令历史、自动连接/断开。
@@ -87,18 +87,18 @@ wx-cli --repl
 
 ```bash
 # 这些命令不需要 daemon，直接本地执行
-wx-cli help
-wx-cli check_environment
-wx-cli ide islogin
-wx-cli ide open --project /path/to/project
-wx-cli config
+wx-devtools-cli help
+wx-devtools-cli check_environment
+wx-devtools-cli ide islogin
+wx-devtools-cli ide open --project /path/to/project
+wx-devtools-cli config
 ```
 
 ### Daemon 管理
 
 ```bash
-wx-cli daemon status    # 查看 daemon 状态
-wx-cli daemon stop      # 停止 daemon
+wx-devtools-cli daemon status    # 查看 daemon 状态
+wx-devtools-cli daemon stop      # 停止 daemon
 ```
 
 ## REPL 特性
@@ -228,36 +228,36 @@ wx-cli daemon stop      # 停止 daemon
 ### 自动化测试
 
 ```bash
-wx-cli connect examples/miniprogram-demo
-wx-cli get_page_snapshot                            # 获取页面快照和元素 UID
-wx-cli click --uid "view.home-release"              # 点击发布按钮
-wx-cli wait_for --selector ".modal" --timeout 3000  # 等待弹窗出现
-wx-cli assert_text --uid ".title" --text "发布"      # 断言标题
-wx-cli screenshot --path ./result.png                # 截图保存
-wx-cli disconnect
+wx-devtools-cli connect examples/miniprogram-demo
+wx-devtools-cli get_page_snapshot                            # 获取页面快照和元素 UID
+wx-devtools-cli click --uid "view.home-release"              # 点击发布按钮
+wx-devtools-cli wait_for --selector ".modal" --timeout 3000  # 等待弹窗出现
+wx-devtools-cli assert_text --uid ".title" --text "发布"      # 断言标题
+wx-devtools-cli screenshot --path ./result.png                # 截图保存
+wx-devtools-cli disconnect
 ```
 
 ### 调试网络请求
 
 ```bash
-wx-cli list_network_requests --urlPattern "/api/" --failedOnly
-wx-cli get_network_request --reqid req_3
+wx-devtools-cli list_network_requests --urlPattern "/api/" --failedOnly
+wx-devtools-cli get_network_request --reqid req_3
 ```
 
 ### 监控 Console 错误
 
 ```bash
-wx-cli list_console_messages --types error,exception
-wx-cli get_console_message --msgid 5
+wx-devtools-cli list_console_messages --types error,exception
+wx-devtools-cli get_console_message --msgid 5
 ```
 
 ### IDE 管理
 
 ```bash
 # 不需要 daemon，直接本地执行
-wx-cli ide open --project /path/to/project
-wx-cli ide login
-wx-cli ide upload --version 1.0.0 --desc "first release"
+wx-devtools-cli ide open --project /path/to/project
+wx-devtools-cli ide login
+wx-devtools-cli ide upload --version 1.0.0 --desc "first release"
 ```
 
 ## UID 引用机制
@@ -289,7 +289,7 @@ npm run setup
 npm run test:launch
 
 # 连接并操作
-wx-cli connect examples/miniprogram-demo
+wx-devtools-cli connect examples/miniprogram-demo
 ```
 
 ## 测试
@@ -315,7 +315,7 @@ npm run test:launch        # IDE 启动流程
 
 ## 配置
 
-配置持久化到 `~/.wx-cli-config.json`。
+配置持久化到 `~/.wx-devtools-cli-config.json`。
 
 ### IDE CLI 路径自动检测
 

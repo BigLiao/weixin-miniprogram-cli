@@ -194,7 +194,7 @@ function startServer(): void {
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
       console.error(`Socket 已被占用: ${SOCKET_PATH}`);
-      console.error('可能已有 daemon 在运行，使用 wx-cli daemon stop 关闭');
+      console.error('可能已有 daemon 在运行，使用 wx-devtools-cli daemon stop 关闭');
       process.exit(1);
     }
     console.error(`服务器错误: ${err.message}`);
