@@ -14,6 +14,7 @@ import { coerceArgs } from './parser.js';
 import { allCommands } from './commands/index.js';
 import { loadPersistedConfig } from './commands/config.js';
 import * as out from './utils/output.js';
+import { logger } from './utils/logger.js';
 
 // ==================== 常量 ====================
 
@@ -24,6 +25,14 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;      // 优雅关闭最长 10 秒
 const MAX_BUFFER_SIZE = 1024 * 1024;     // 客户端 buffer 最大 1MB
 
 // ==================== 初始化 ====================
+
+// daemon 始终开启日志（通过 WX_DEBUG 环境变量控制，或默认 info 级别）
+const debugMode = process.env.WX_DEBUG === '1';
+logger.init(true, 'daemon');
+if (!debugMode) {
+  // 非调试模式下只记录 info 及以上，不输出 debug 级别
+  logger.setLevel('info');
+}
 
 // 注册所有命令
 registry.registerAll(allCommands);
@@ -46,15 +55,9 @@ let isShuttingDown = false;
 function resetIdleTimer(): void {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
-    log('空闲超时，自动关闭');
+    logger.info('空闲超时，自动关闭');
     gracefulShutdown();
   }, IDLE_TIMEOUT_MS);
-}
-
-function log(msg: string): void {
-  const ts = new Date().toISOString().slice(11, 19);
-  // daemon 运行在后台，日志写到 stderr（可选重定向）
-  process.stderr.write(`[daemon ${ts}] ${msg}\n`);
 }
 
 // ==================== 请求处理 ====================
@@ -103,23 +106,31 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
   let finalArgs = { ...args };
 
   if (!cmd) {
+    logger.warn(`未知命令: ${command}`);
     return { ok: false, error: `未知命令: ${command}` };
   }
 
   // 串行执行（防止并发修改 ctx）+ 超时保护
   return new Promise<DaemonResponse>((resolve) => {
     commandLock = commandLock.then(async () => {
+      const startTime = Date.now();
       const timer = setTimeout(() => {
+        logger.error(`命令超时: ${command}`, `(${COMMAND_TIMEOUT_MS}ms)`);
         resolve({ ok: false, error: `命令超时 (${COMMAND_TIMEOUT_MS}ms): ${command}` });
       }, COMMAND_TIMEOUT_MS);
 
       try {
+        logger.debug(`exec: ${command}`, finalArgs);
         const coerced = coerceArgs(finalArgs, cmd!.args);
         const result = await cmd!.handler(coerced, ctx);
         clearTimeout(timer);
+        const elapsed = Date.now() - startTime;
+        logger.debug(`done: ${command}`, `(${elapsed}ms)`);
         resolve({ ok: true, output: result || '' });
       } catch (e: any) {
         clearTimeout(timer);
+        const elapsed = Date.now() - startTime;
+        logger.error(`fail: ${command}`, `(${elapsed}ms)`, e.message);
         resolve({ ok: false, error: e.message });
       }
     });
@@ -133,14 +144,16 @@ function startServer(): void {
   if (fs.existsSync(SOCKET_PATH)) {
     try {
       fs.unlinkSync(SOCKET_PATH);
+      logger.debug('清理残留 socket 文件');
     } catch {
-      console.error(`无法清理 socket: ${SOCKET_PATH}`);
+      logger.error(`无法清理 socket: ${SOCKET_PATH}`);
       process.exit(1);
     }
   }
 
   const server = net.createServer((conn) => {
     resetIdleTimer();
+    logger.debug('新连接');
 
     let buffer = '';
 
@@ -149,6 +162,7 @@ function startServer(): void {
 
       // 防止客户端发送无限数据
       if (buffer.length > MAX_BUFFER_SIZE) {
+        logger.warn('请求数据过大，断开连接');
         const resp: DaemonResponse = { ok: false, error: '请求数据过大' };
         conn.write(JSON.stringify(resp) + '\n');
         conn.end();
@@ -168,15 +182,17 @@ function startServer(): void {
         try {
           req = JSON.parse(line);
         } catch {
+          logger.warn('无效的 JSON 请求');
           const resp: DaemonResponse = { ok: false, error: '无效的 JSON 请求' };
           conn.write(JSON.stringify(resp) + '\n');
           return;
         }
 
-        log(`← ${req.command} ${Object.keys(req.args || {}).length > 0 ? JSON.stringify(req.args) : ''}`);
+        const argsStr = Object.keys(req.args || {}).length > 0 ? JSON.stringify(req.args) : '';
+        logger.info(`← ${req.command}`, argsStr);
 
         handleRequest(req).then((resp) => {
-          log(`→ ${resp.ok ? 'ok' : 'err'} ${resp.ok ? '' : resp.error || ''}`);
+          logger.info(`→ ${resp.ok ? 'ok' : 'err'}`, resp.ok ? '' : (resp.error || ''));
           try {
             conn.write(JSON.stringify(resp) + '\n');
           } catch {
@@ -193,11 +209,10 @@ function startServer(): void {
 
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`Socket 已被占用: ${SOCKET_PATH}`);
-      console.error('可能已有 daemon 在运行，使用 wx-devtools-cli daemon stop 关闭');
+      logger.error(`Socket 已被占用: ${SOCKET_PATH}`);
       process.exit(1);
     }
-    console.error(`服务器错误: ${err.message}`);
+    logger.error(`服务器错误: ${err.message}`);
     process.exit(1);
   });
 
@@ -205,8 +220,8 @@ function startServer(): void {
     // 写 PID 文件
     fs.writeFileSync(PID_FILE, String(process.pid));
 
-    log(`daemon 已启动 (PID: ${process.pid})`);
-    log(`socket: ${SOCKET_PATH}`);
+    logger.info(`daemon 已启动 (PID: ${process.pid})`);
+    logger.info(`socket: ${SOCKET_PATH}`);
 
     // 启动空闲计时器
     resetIdleTimer();
@@ -223,11 +238,11 @@ async function gracefulShutdown(): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  log('正在关闭...');
+  logger.info('正在关闭...');
 
   // 强制退出保底 — 无论如何 SHUTDOWN_TIMEOUT_MS 后一定退出
   const forceTimer = setTimeout(() => {
-    log('强制退出（关闭超时）');
+    logger.error('强制退出（关闭超时）');
     try { fs.unlinkSync(SOCKET_PATH); } catch {}
     try { fs.unlinkSync(PID_FILE); } catch {}
     process.exit(1);
@@ -244,7 +259,7 @@ async function gracefulShutdown(): Promise<void> {
         ctx.miniProgram.disconnect(),
         new Promise(r => setTimeout(r, 5000)),
       ]);
-      log('miniProgram 连接已断开');
+      logger.info('miniProgram 连接已断开');
     } catch {
       // 忽略
     }
@@ -261,7 +276,8 @@ async function gracefulShutdown(): Promise<void> {
   try { fs.unlinkSync(SOCKET_PATH); } catch {}
   try { fs.unlinkSync(PID_FILE); } catch {}
 
-  log('daemon 已关闭');
+  logger.info('daemon 已关闭');
+  logger.close();
   clearTimeout(forceTimer);
   process.exit(0);
 }
@@ -270,7 +286,7 @@ async function gracefulShutdown(): Promise<void> {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 process.on('uncaughtException', (err) => {
-  log(`未捕获异常: ${err.message}`);
+  logger.error(`未捕获异常: ${err.message}`);
   // 不调用 gracefulShutdown（可能会再抛异常导致无限递归）
   // 直接强制清理退出
   try { fs.unlinkSync(SOCKET_PATH); } catch {}
@@ -278,7 +294,7 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 process.on('unhandledRejection', (reason: any) => {
-  log(`未处理的 Promise 拒绝: ${reason?.message || reason}`);
+  logger.error(`未处理的 Promise 拒绝: ${reason?.message || reason}`);
   // 不退出，只记录日志（避免 handler 中的 Promise 错误杀掉 daemon）
 });
 

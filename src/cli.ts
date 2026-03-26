@@ -17,6 +17,7 @@ import { parseCommand, coerceArgs } from './parser.js';
 import { allCommands } from './commands/index.js';
 import { loadPersistedConfig } from './commands/config.js';
 import * as out from './utils/output.js';
+import { logger } from './utils/logger.js';
 import {
   isDaemonRunning,
   sendCommand,
@@ -24,6 +25,28 @@ import {
   stopDaemon,
   getDaemonPid,
 } from './client.js';
+
+// ==================== Debug 模式初始化 ====================
+
+// 提取 --debug 标志（在所有命令解析之前）
+const rawArgv = process.argv.slice(2);
+const hasDebugFlag = rawArgv.includes('--debug');
+if (hasDebugFlag) {
+  // 从 argv 中移除 --debug，避免影响后续命令解析
+  const idx = rawArgv.indexOf('--debug');
+  rawArgv.splice(idx, 1);
+}
+
+const debugEnabled = hasDebugFlag || process.env.WX_DEBUG === '1';
+
+// 设置环境变量，确保子进程（daemon）也能继承
+if (debugEnabled) {
+  process.env.WX_DEBUG = '1';
+}
+
+logger.init(debugEnabled, 'cli');
+logger.debug('debug 模式已开启');
+logger.debug('argv:', rawArgv);
 
 // 注册所有命令（用于 REPL 模式和本地执行）
 registry.registerAll(allCommands);
@@ -133,6 +156,10 @@ function showHelp(cmdName?: string): string {
   lines.push(chalk.dim('  示例: wx-devtools-cli click button.submit'));
   lines.push(chalk.dim('  示例: wx-devtools-cli ide open --project /path'));
   lines.push('');
+  lines.push(chalk.yellow('  调试:'));
+  lines.push(`    ${chalk.cyan('--debug')}                      ${chalk.dim('开启调试日志（同 WX_DEBUG=1）')}`);
+  lines.push(`    ${chalk.dim('日志文件: /tmp/wx-devtools-cli.log')}`);
+  lines.push('');
 
   return lines.join('\n');
 }
@@ -212,6 +239,8 @@ function resolveCommand(input: string, options?: { silent?: boolean }): Resolved
   const { command, args } = parseCommand(input);
   if (!command) return null;
 
+  logger.debug(`resolveCommand: ${command}`, args);
+
   // 1. 查找命令（支持 "ide open" 等命名空间形式）
   let cmd = registry.get(command);
   let finalArgs = { ...args };
@@ -265,7 +294,9 @@ async function executeDaemonCommand(input: string): Promise<void> {
   if (!resolved) return;
 
   try {
+    logger.debug(`sendCommand: ${resolved.cmd.name}`, resolved.args);
     const resp = await sendCommand(resolved.cmd.name, resolved.args);
+    logger.debug(`response: ok=${resp.ok}`, resp.ok ? '' : resp.error);
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
     } else {
@@ -528,7 +559,9 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
 
 // ==================== 入口 ====================
 
-const argv = process.argv.slice(2);
+const argv = rawArgv;
+
+logger.debug('入口分支判断', { first: argv[0], len: argv.length });
 
 if (argv[0] === 'connect' && argv.length >= 2) {
   // ======= wx-devtools-cli connect <project_path> [options...] =======
@@ -555,6 +588,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
   (async () => {
     try {
       // 启动 daemon
+      logger.debug('检查 daemon 状态...');
       const running = await isDaemonRunning();
       if (!running) {
         console.log(out.dim('  启动 daemon...'));
@@ -594,6 +628,10 @@ if (argv[0] === 'connect' && argv.length >= 2) {
     } else {
       console.log(out.error(resp.error || '断开失败'));
     }
+    // 断开后自动停止 daemon
+    logger.debug('断开后自动停止 daemon');
+    await stopDaemon();
+    console.log(out.dim('  daemon 已停止'));
   })();
 
 } else if (argv[0] === 'daemon' && argv.length >= 2) {

@@ -21,6 +21,9 @@ const MEDIA_URL_ATTRS: Record<string, string[]> = {
   'live-pusher': ['url'],
 };
 
+/** 同一选择器最多展示的元素数量 */
+const MAX_SAME_SELECTOR = 8;
+
 /**
  * 从 WxmlNode 树生成 UID 映射
  * @param nodes - 解析后的 WXML 节点树
@@ -39,11 +42,15 @@ export function buildElementMap(nodes: WxmlNode[]): Map<string, ElementMapInfo> 
       const count = selectorCount.get(selector) || 0;
       selectorCount.set(selector, count + 1);
 
-      const uid = count > 0 ? `${selector}[${count}]` : selector;
-      map.set(uid, { selector, index: count });
-
-      // 将 uid 附加到节点上，方便格式化时使用
-      (node as any)._uid = uid;
+      if (count < MAX_SAME_SELECTOR) {
+        const uid = count > 0 ? `${selector}:${count}` : selector;
+        map.set(uid, { selector, index: count });
+        (node as any)._uid = uid;
+      } else {
+        // 超限：标记整棵子树为已省略，不注册到 elementMap
+        markSkipped(node, selector, count + 1);
+        return; // 不再递归子节点（markSkipped 内部已处理）
+      }
     }
 
     for (const child of node.children) {
@@ -51,8 +58,27 @@ export function buildElementMap(nodes: WxmlNode[]): Map<string, ElementMapInfo> 
     }
   }
 
+  /** 标记节点为已省略（不递归子树） */
+  function markSkipped(node: WxmlNode, selector: string, _total: number): void {
+    (node as any)._uid = undefined;
+    (node as any)._skipped = selector;
+  }
+
   for (const node of nodes) {
     walk(node);
+  }
+
+  // 第二遍：回填最终 total 到所有被省略的节点
+  function patchTotal(node: WxmlNode): void {
+    if ((node as any)._skipped) {
+      (node as any)._skippedTotal = selectorCount.get((node as any)._skipped) || 0;
+    }
+    for (const child of node.children) {
+      patchTotal(child);
+    }
+  }
+  for (const node of nodes) {
+    patchTotal(node);
   }
 
   return map;
@@ -101,12 +127,15 @@ export function formatSnapshotTree(
   const { maxDepth = Infinity, maxElements = 500 } = options;
   const lines: string[] = [];
   let elementCount = 0;
+  // 记录已输出过省略提示的 selector，避免重复
+  const skippedShown = new Set<string>();
 
   function walk(node: WxmlNode, depth: number): void {
     if (!node.tagName || elementCount >= maxElements) return;
 
     const indent = '  '.repeat(depth);
     const uid = (node as any)._uid as string | undefined;
+    const skippedSelector = (node as any)._skipped as string | undefined;
 
     // 跳过 page/body 容器，但继续遍历子节点
     if (SKIP_TAGS.has(node.tagName)) {
@@ -114,6 +143,17 @@ export function formatSnapshotTree(
         walk(child, depth);
       }
       return;
+    }
+
+    // 被省略的重复元素：只输出一次汇总提示，跳过整棵子树
+    if (skippedSelector) {
+      if (!skippedShown.has(skippedSelector)) {
+        skippedShown.add(skippedSelector);
+        const total = (node as any)._skippedTotal || '?';
+        lines.push(`${indent}[... ${skippedSelector} 共 ${total} 个，已展示 ${MAX_SAME_SELECTOR} 个]`);
+        elementCount++;
+      }
+      return; // 不递归子节点
     }
 
     elementCount++;

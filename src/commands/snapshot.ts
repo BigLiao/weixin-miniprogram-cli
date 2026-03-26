@@ -227,7 +227,11 @@ async function getFlatSnapshot(
       // 处理重复选择器：加索引
       const count = selectorIndexMap.get(baseSelector) || 0;
       selectorIndexMap.set(baseSelector, count + 1);
-      const uid = count > 0 ? `${baseSelector}[${count}]` : baseSelector;
+
+      // 同一选择器超过 8 个时省略
+      if (count >= 8) continue;
+
+      const uid = count > 0 ? `${baseSelector}:${count}` : baseSelector;
 
       // 注册到 elementMap
       ctx.elementMap.set(uid, { selector: baseSelector, index: count });
