@@ -31,30 +31,40 @@ const MAX_SAME_SELECTOR = 8;
  */
 export function buildElementMap(nodes: WxmlNode[]): Map<string, ElementMapInfo> {
   const map = new Map<string, ElementMapInfo>();
+  /** 按精确 selector 计数 → 用于 elementMap.index（SDK 查询索引） */
   const selectorCount = new Map<string, number>();
+  /** 按简洁 uidBase 计数 → 用于生成不重复的 UID */
+  const uidBaseCount = new Map<string, number>();
 
-  function walk(node: WxmlNode): void {
+  function walk(node: WxmlNode, ancestors: WxmlNode[] = []): void {
     if (!node || !node.tagName) return;
 
     // 跳过 page/body 容器
     if (!SKIP_TAGS.has(node.tagName)) {
-      const selector = buildSelectorFromWxml(node);
-      const count = selectorCount.get(selector) || 0;
-      selectorCount.set(selector, count + 1);
+      const uidBase = buildUidBase(node);
+      const selector = buildSelector(node, ancestors);
 
-      if (count < MAX_SAME_SELECTOR) {
-        const uid = count > 0 ? `${selector}:${count}` : selector;
-        map.set(uid, { selector, index: count });
+      const sIndex = selectorCount.get(selector) || 0;
+      selectorCount.set(selector, sIndex + 1);
+
+      const uidIdx = uidBaseCount.get(uidBase) || 0;
+      uidBaseCount.set(uidBase, uidIdx + 1);
+
+      if (sIndex < MAX_SAME_SELECTOR) {
+        const uid = uidIdx > 0 ? `${uidBase}:${uidIdx}` : uidBase;
+        map.set(uid, { selector, index: sIndex });
         (node as any)._uid = uid;
       } else {
-        // 超限：标记整棵子树为已省略，不注册到 elementMap
-        markSkipped(node, selector, count + 1);
-        return; // 不再递归子节点（markSkipped 内部已处理）
+        markSkipped(node, selector, sIndex + 1);
+        return;
       }
     }
 
+    // 构建子节点的祖先链（跳过 page/body 容器不加入）
+    const childAncestors = SKIP_TAGS.has(node.tagName) ? ancestors : [node, ...ancestors];
+
     for (const child of node.children) {
-      walk(child);
+      walk(child, childAncestors);
     }
   }
 
@@ -85,30 +95,54 @@ export function buildElementMap(nodes: WxmlNode[]): Map<string, ElementMapInfo> 
 }
 
 /**
- * 从 WxmlNode 构建选择器
+ * 构建简洁的 UID 基础名（仅自身 id/class/tag，不含祖先）
  */
-function buildSelectorFromWxml(node: WxmlNode): string {
+function buildUidBase(node: WxmlNode): string {
   const tag = node.tagName || 'view';
   const id = node.attributes?.id;
-  const className = node.attributes?.class;
+  if (id) return `${tag}#${id}`;
 
-  // 优先用 id
-  if (id) {
-    return `${tag}#${id}`;
+  const className = node.attributes?.class;
+  if (className) {
+    const meaningful = pickMeaningfulClass(className);
+    if (meaningful) return `${tag}.${meaningful}`;
   }
 
-  // 其次用有意义的 class（取第一个非 bar--/icon--/search-- 前缀的 class）
-  if (className) {
-    const classes = className.trim().split(/\s+/).filter(Boolean);
-    // 过滤掉 BEM 修饰符前缀（如 bar--xxx, icon--xxx）
-    const meaningful = classes.find(c => !c.includes('--')) || classes[0];
-    if (meaningful) {
-      return `${tag}.${meaningful}`;
+  return tag;
+}
+
+/**
+ * 构建精确选择器，用于 SDK 查询
+ *
+ * 自身有 id/class 时与 uidBase 一致；
+ * 自身无 id/class 时，向上最多查 3 层祖先，拼成 `.ancestor tag` 复合选择器
+ */
+function buildSelector(node: WxmlNode, ancestors: WxmlNode[]): string {
+  // 自身有 id/class 时直接用
+  const base = buildUidBase(node);
+  const tag = node.tagName || 'view';
+  if (base !== tag) return base;
+
+  // 自身无 id/class：向上查找最近有 id/class 的祖先（最多 3 层）
+  const maxLookup = Math.min(ancestors.length, 3);
+  for (let i = 0; i < maxLookup; i++) {
+    const ancestor = ancestors[i];
+    if (!ancestor?.tagName) continue;
+
+    const ancBase = buildUidBase(ancestor);
+    if (ancBase !== ancestor.tagName) {
+      return `${ancBase} ${tag}`;
     }
   }
 
-  // 最后用 tag name
   return tag;
+}
+
+/** 从 class 字符串中提取第一个有意义的 class（非 BEM 修饰符） */
+function pickMeaningfulClass(className: string): string | undefined {
+  const classes = className.trim().split(/\s+/).filter(Boolean);
+  const meaningful = classes.find(c => !c.includes('--')) || classes[0];
+  return meaningful || undefined;
 }
 
 /**

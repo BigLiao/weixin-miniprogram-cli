@@ -9,7 +9,7 @@
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import { type ElementMapInfo } from '../context.js';
-import { parseWxml, countNodes } from '../utils/wxml-parser.js';
+import { parseWxml, type WxmlNode } from '../utils/wxml-parser.js';
 import { buildElementMap, formatSnapshotTree } from '../utils/uid.js';
 import * as out from '../utils/output.js';
 
@@ -115,12 +115,14 @@ async function getTreeSnapshot(
     // 生成 elementMap（DFS 顺序，与 $$() 查询一致）
     const elementMap = buildElementMap(tree);
 
+    // ========== 回填文本：对缺失 text 的节点通过 SDK 补充 ==========
+    await backfillText(page, tree, elementMap);
+
     // 注册到 ctx
     for (const [uid, info] of elementMap) {
       ctx.elementMap.set(uid, info);
     }
 
-    const totalNodes = countNodes(tree);
     const lines: string[] = [];
     lines.push(out.success(`快照获取成功，共 ${elementMap.size} 个元素 (树形)`));
     lines.push(`  页面: ${page.path}`);
@@ -135,6 +137,72 @@ async function getTreeSnapshot(
     return lines;
   } catch {
     return null;
+  }
+}
+
+/**
+ * 回填树中缺失文本的 <text> 节点
+ * 按 selector 分组批量查询，调用 .text() 获取真实文本
+ */
+async function backfillText(
+  page: any,
+  tree: WxmlNode[],
+  elementMap: Map<string, ElementMapInfo>,
+): Promise<void> {
+  // 收集需要回填文本的 <text> 节点（有 uid 且 text 为空）
+  const needText: { node: WxmlNode; selector: string; index: number }[] = [];
+
+  function collectEmpty(node: WxmlNode): void {
+    const uid = (node as any)._uid as string | undefined;
+    if (uid && !node.text && node.tagName === 'text') {
+      const info = elementMap.get(uid);
+      if (info) {
+        needText.push({ node, selector: info.selector, index: info.index });
+      }
+    }
+    for (const child of node.children) {
+      collectEmpty(child);
+    }
+  }
+  for (const n of tree) collectEmpty(n);
+
+  if (needText.length === 0) return;
+
+  // 按 selector 分组，避免重复查询同一选择器
+  const bySelector = new Map<string, { node: WxmlNode; index: number }[]>();
+  for (const item of needText) {
+    let group = bySelector.get(item.selector);
+    if (!group) {
+      group = [];
+      bySelector.set(item.selector, group);
+    }
+    group.push({ node: item.node, index: item.index });
+  }
+
+  // 批量查询并回填（限制并发，避免太多同时请求）
+  const entries = Array.from(bySelector.entries());
+  const BATCH = 5;
+  for (let i = 0; i < entries.length; i += BATCH) {
+    const batch = entries.slice(i, i + BATCH);
+    await Promise.all(batch.map(async ([selector, items]) => {
+      try {
+        const elements = await page.$$(selector);
+        for (const { node, index } of items) {
+          if (index < elements.length) {
+            try {
+              const text = await elements[index].text();
+              if (text && text.trim()) {
+                node.text = text.trim();
+              }
+            } catch {
+              // 单个元素获取文本失败，跳过
+            }
+          }
+        }
+      } catch {
+        // 选择器查询失败，跳过整组
+      }
+    }));
   }
 }
 
