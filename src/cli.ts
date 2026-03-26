@@ -151,20 +151,25 @@ function showHelp(cmdName?: string): string {
   lines.push(`    ${chalk.cyan('clear'.padEnd(28))} ${chalk.dim('清屏')}`);
   lines.push(`    ${chalk.cyan('history'.padEnd(28))} ${chalk.dim('显示命令历史')}`);
   lines.push('');
-  lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/to/project'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli get_page_snapshot'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli click button.submit'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli ide open --project /path'));
+
+  lines.push(chalk.yellow('  全局选项:'));
+  lines.push(`    ${chalk.cyan('--session <id>'.padEnd(28))} ${chalk.dim('指定目标 session（多连接时使用）')}`);
+  lines.push(`    ${chalk.cyan('--debug'.padEnd(28))} ${chalk.dim('开启调试日志（同 WX_DEBUG=1）')}`);
+  lines.push(`    ${chalk.dim('  环境变量: WX_SESSION=<id>  等效于 --session')}`);
+  lines.push(`    ${chalk.dim('  日志文件: /tmp/wx-devtools-cli.log')}`);
   lines.push('');
-  lines.push(chalk.yellow('  调试:'));
-  lines.push(`    ${chalk.cyan('--debug')}                      ${chalk.dim('开启调试日志（同 WX_DEBUG=1）')}`);
-  lines.push(`    ${chalk.dim('日志文件: /tmp/wx-devtools-cli.log')}`);
+
+  lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/to/project'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/b --session s2'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli get_page_snapshot --session s2'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli list_sessions --probe'));
   lines.push('');
 
   return lines.join('\n');
 }
 
 function formatCommandHelp(cmd: CommandDef): string {
+  const isDaemonCmd = !isLocalCommand(cmd.name);
   const lines = [
     '',
     chalk.bold(`  ${cmd.name}`) + chalk.dim(` — ${cmd.description}`),
@@ -172,7 +177,7 @@ function formatCommandHelp(cmd: CommandDef): string {
     '',
   ];
 
-  if (cmd.args.length > 0) {
+  if (cmd.args.length > 0 || isDaemonCmd) {
     lines.push(chalk.yellow('  参数:'));
     for (const arg of cmd.args) {
       const required = arg.required ? chalk.red('*') : ' ';
@@ -181,6 +186,12 @@ function formatCommandHelp(cmd: CommandDef): string {
       const typeStr = chalk.dim(`<${arg.type}>`);
 
       lines.push(`  ${required} --${chalk.cyan(arg.name.padEnd(20))}${alias} ${typeStr} ${arg.description}${defaultVal}`);
+    }
+    // daemon 命令追加全局 --session 选项
+    if (isDaemonCmd) {
+      lines.push('');
+      lines.push(chalk.dim('  全局选项:'));
+      lines.push(`    --${chalk.cyan('session'.padEnd(20))} ${chalk.dim('<string>')} 指定目标 session（多连接时使用，等效 WX_SESSION）`);
     }
   } else {
     lines.push(chalk.dim('  无参数'));
