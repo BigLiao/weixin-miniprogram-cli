@@ -1,13 +1,13 @@
 /**
  * 脚本执行命令 (1个)
- * evaluate_script
+ * eval
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
 export const evaluateScript: CommandDef = defineCommand({
-  name: 'evaluate_script',
+  name: 'eval',
   description: '在小程序中执行 JavaScript 代码',
   category: '脚本执行',
   args: [

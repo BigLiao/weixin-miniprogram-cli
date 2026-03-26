@@ -1,9 +1,9 @@
 /**
  * 测试: 诊断工具 (4个命令)
- * - check_environment
- * - diagnose_connection
- * - debug_page_elements
- * - debug_connection_flow
+ * - check-env
+ * - diagnose
+ * - debug-elements
+ * - debug-connect
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';
@@ -11,31 +11,31 @@ import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from 
 async function main() {
   console.log('🔧 测试: 诊断工具命令');
 
-  await describe('check_environment', async () => {
-    const result = await run('check_environment', {});
+  await describe('check-env', async () => {
+    const result = await run('check-env', {});
     assert(result.includes('环境检查'), '应返回环境检查结果');
     assert(result.includes('Node.js'), '应包含 Node.js 信息');
   });
 
-  await describe('diagnose_connection', async () => {
-    const result = await run('diagnose_connection', { project: DEMO_PROJECT_PATH });
+  await describe('diagnose', async () => {
+    const result = await run('diagnose', { project: DEMO_PROJECT_PATH });
     assert(result.includes('连接诊断'), '应返回诊断结果');
     assert(result.includes('项目路径'), '应检查项目路径');
   });
 
   // 以下需要连接
-  await run('connect_devtools', { project: DEMO_PROJECT_PATH });
+  await run('open', { project: DEMO_PROJECT_PATH });
   console.log('   已连接\n');
 
-  await describe('debug_page_elements', async () => {
-    const result = await run('debug_page_elements', { testAllStrategies: true });
+  await describe('debug-elements', async () => {
+    const result = await run('debug-elements', { testAllStrategies: true });
     assert(result.includes('页面元素调试'), '应返回调试结果');
   });
 
-  await describe('debug_connection_flow (dry-run)', async () => {
+  await describe('debug-connect (dry-run)', async () => {
     // 断开后用 dry-run 测试
-    await run('disconnect_devtools', {});
-    const result = await run('debug_connection_flow', {
+    await run('close', {});
+    const result = await run('debug-connect', {
       project: DEMO_PROJECT_PATH,
       mode: 'auto',
       dryRun: true,

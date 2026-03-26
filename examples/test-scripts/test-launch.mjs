@@ -39,8 +39,8 @@ async function main() {
   });
 
   // ========== Step 2: 打开项目 ==========
-  await describe('ide open（打开 demo 项目）', async () => {
-    const result = await run('ide open', { project: DEMO_PROJECT_PATH });
+  await describe('ci open（打开 demo 项目）', async () => {
+    const result = await run('ci open', { project: DEMO_PROJECT_PATH });
     console.log(`    ${result}`);
     assert(result.includes('已打开') || result.includes('IDE'), '项目应打开成功');
   });
@@ -50,8 +50,8 @@ async function main() {
   await new Promise(r => setTimeout(r, 3000));
 
   // ========== Step 3: 检查登录状态 ==========
-  await describe('ide islogin（检查登录）', async () => {
-    const result = await run('ide islogin');
+  await describe('ci islogin（检查登录）', async () => {
+    const result = await run('ci islogin');
     console.log(`    ${result}`);
 
     const isLoggedIn = result.includes('已登录');
@@ -76,7 +76,7 @@ async function main() {
       if (loginResult.status === 0) {
         console.log('');
         // 再次验证
-        const verifyResult = await run('ide islogin');
+        const verifyResult = await run('ci islogin');
         const verified = verifyResult.includes('已登录');
         assert(verified, '扫码后应已登录');
       } else {
@@ -86,8 +86,8 @@ async function main() {
   });
 
   // ========== Step 4: 启用自动化 ==========
-  await describe('ide auto（启用自动化）', async () => {
-    const result = await run('ide auto', { project: DEMO_PROJECT_PATH, autoPort: 9420 });
+  await describe('ci auto（启用自动化）', async () => {
+    const result = await run('ci auto', { project: DEMO_PROJECT_PATH, autoPort: 9420 });
     console.log(`    ${result}`);
     assert(
       result.includes('已启用') || result.includes('auto'),
@@ -102,7 +102,7 @@ async function main() {
     console.log('');
     console.log('🎉 IDE 已就绪！现在可以：');
     console.log(`   npm start`);
-    console.log(`   wx> connect_devtools --project ${DEMO_PROJECT_PATH}`);
+    console.log(`   wx> open --project ${DEMO_PROJECT_PATH}`);
     console.log('');
   }
 

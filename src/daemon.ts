@@ -25,7 +25,7 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;      // 优雅关闭最长 10 秒
 const MAX_BUFFER_SIZE = 1024 * 1024;     // 客户端 buffer 最大 1MB
 
 /** 不需要 resolve session 的命令（session 管理命令通过闭包捕获 sessionMgr） */
-const SESSION_META_COMMANDS = new Set(['list_sessions', 'switch_session']);
+const SESSION_META_COMMANDS = new Set(['sessions', 'switch-session']);
 
 // ==================== 初始化 ====================
 
@@ -100,7 +100,7 @@ function resolveSessionForRequest(command: string, reqSession?: string): Session
     return null;
   }
 
-  if (command === 'connect') {
+  if (command === 'open') {
     let session: Session;
     if (reqSession && sessionMgr.get(reqSession)) {
       // 显式指定且已存在 → 复用（reconnect 场景）
@@ -184,12 +184,12 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
         logger.debug(`done: ${command}${sessionLabel}`, `(${Date.now() - startTime}ms)`);
 
         // connect 成功后标记 connected
-        if (command === 'connect' && ctx?.miniProgram) {
+        if (command === 'open' && ctx?.miniProgram) {
           ctx.status = 'connected';
         }
 
         // disconnect 后标记 disconnected（session 保留在 map 中）
-        if (command === 'disconnect' && ctx) {
+        if (command === 'close' && ctx) {
           ctx.status = 'disconnected';
         }
 

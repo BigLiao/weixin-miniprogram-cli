@@ -1,6 +1,6 @@
 /**
  * 连接管理命令组 (4个)
- * connect, reconnect, disconnect, status
+ * open, reconnect, close, status
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -137,7 +137,7 @@ async function initAppInfo(ctx: SharedContext): Promise<string[]> {
 }
 
 export const connectDevtools: CommandDef = defineCommand({
-  name: 'connect',
+  name: 'open',
   description: '连接到微信开发者工具（支持多种策略）',
   category: '连接管理',
   args: [
@@ -222,7 +222,7 @@ export const reconnectDevtools: CommandDef = defineCommand({
   ],
   handler: async (args, ctx) => {
     if (!ctx.lastConnectionParams && !args.project && !args.ws) {
-      return out.error('没有上次的连接参数，请使用 connect');
+      return out.error('没有上次的连接参数，请使用 open');
     }
 
     // 先断开
@@ -238,7 +238,7 @@ export const reconnectDevtools: CommandDef = defineCommand({
 });
 
 export const disconnectDevtools: CommandDef = defineCommand({
-  name: 'disconnect',
+  name: 'close',
   description: '断开与微信开发者工具的连接',
   category: '连接管理',
   args: [],

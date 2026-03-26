@@ -1,7 +1,7 @@
 /**
  * 测试: 截图 + 脚本执行 (2个命令)
  * - screenshot
- * - evaluate_script
+ * - eval
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';
@@ -10,7 +10,7 @@ import { existsSync, unlinkSync } from 'fs';
 async function main() {
   console.log('🔧 测试: 截图 + 脚本执行命令');
 
-  await run('connect_devtools', { project: DEMO_PROJECT_PATH });
+  await run('open', { project: DEMO_PROJECT_PATH });
   console.log('   已连接\n');
 
   await describe('screenshot', async () => {
@@ -25,8 +25,8 @@ async function main() {
     try { unlinkSync(path); } catch {}
   });
 
-  await describe('evaluate_script', async () => {
-    const result = await run('evaluate_script', { script: 'return 1 + 1;' });
+  await describe('eval', async () => {
+    const result = await run('eval', { script: 'return 1 + 1;' });
     assert(result.includes('2') || result.includes('执行'), '应返回执行结果');
   });
 

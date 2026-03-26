@@ -22,19 +22,19 @@ npm run launch
 
 ## test-scripts
 
-CLI 集成测试脚本，覆盖全部 31 个命令。
+CLI 集成测试脚本，覆盖全部命令。
 
 | 测试文件 | 覆盖命令 | 数量 |
 |---------|---------|------|
-| test-connection.mjs | connect/reconnect/disconnect/status | 4 |
-| test-page.mjs | get_current_page/query_selector/wait_for/get_page_snapshot | 4 |
-| test-input.mjs | click/input_text/get_value/set_form_control | 4 |
-| test-navigate.mjs | navigate_to/navigate_back/switch_tab/relaunch | 4 |
-| test-assert.mjs | assert_text/assert_attribute/assert_state | 3 |
-| test-console.mjs | list_console_messages/get_console_message | 2 |
-| test-network.mjs | list/get/clear/stop_network | 4 |
-| test-screenshot-script.mjs | screenshot/evaluate_script | 2 |
-| test-diagnose.mjs | diagnose/check_env/debug_elements/debug_flow | 4 |
+| test-connection.mjs | open/reconnect/close/status | 4 |
+| test-page.mjs | page/query/wait/snapshot | 4 |
+| test-input.mjs | click/fill/value/set-value | 4 |
+| test-navigate.mjs | goto/go-back/switch-tab/relaunch | 4 |
+| test-assert.mjs | assert-text/assert-attr/assert-state | 3 |
+| test-console.mjs | console/console-detail | 2 |
+| test-network.mjs | network/network-detail/network-clear/network-stop | 4 |
+| test-screenshot-script.mjs | screenshot/eval | 2 |
+| test-diagnose.mjs | diagnose/check-env/debug-elements/debug-connect | 4 |
 
 ### 运行测试
 

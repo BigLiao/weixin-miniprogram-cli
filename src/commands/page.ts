@@ -1,13 +1,13 @@
 /**
  * 页面查询命令组 (3个)
- * get_current_page, query_selector, wait_for
+ * page, query, wait
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
 export const getCurrentPage: CommandDef = defineCommand({
-  name: 'get_current_page',
+  name: 'page',
   description: '获取当前页面信息并设为活动页面',
   category: '页面查询',
   args: [],
@@ -31,7 +31,7 @@ export const getCurrentPage: CommandDef = defineCommand({
 });
 
 export const querySelector: CommandDef = defineCommand({
-  name: 'query_selector',
+  name: 'query',
   description: '通过 CSS 选择器查找页面元素',
   category: '页面查询',
   args: [
@@ -70,7 +70,7 @@ export const querySelector: CommandDef = defineCommand({
 });
 
 export const waitFor: CommandDef = defineCommand({
-  name: 'wait_for',
+  name: 'wait',
   description: '等待条件满足（时间、元素出现、文本匹配、可见性）',
   category: '页面查询',
   args: [

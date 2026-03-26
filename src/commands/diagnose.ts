@@ -1,6 +1,6 @@
 /**
  * 诊断工具命令组 (4个)
- * diagnose_connection, check_environment, debug_page_elements, debug_connection_flow
+ * diagnose, check-env, debug-elements, debug-connect
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -13,7 +13,7 @@ import { execSync } from 'child_process';
 import automator from 'miniprogram-automator';
 
 export const diagnoseConnection: CommandDef = defineCommand({
-  name: 'diagnose_connection',
+  name: 'diagnose',
   description: '诊断连接问题，检查配置和环境',
   category: '诊断工具',
   args: [
@@ -84,7 +84,7 @@ export const diagnoseConnection: CommandDef = defineCommand({
 });
 
 export const checkEnvironment: CommandDef = defineCommand({
-  name: 'check_environment',
+  name: 'check-env',
   description: '检查运行环境（Node.js、微信开发者工具等）',
   category: '诊断工具',
   args: [],
@@ -152,7 +152,7 @@ export const checkEnvironment: CommandDef = defineCommand({
 });
 
 export const debugPageElements: CommandDef = defineCommand({
-  name: 'debug_page_elements',
+  name: 'debug-elements',
   description: '调试页面元素获取问题',
   category: '诊断工具',
   args: [
@@ -205,7 +205,7 @@ export const debugPageElements: CommandDef = defineCommand({
 });
 
 export const debugConnectionFlow: CommandDef = defineCommand({
-  name: 'debug_connection_flow',
+  name: 'debug-connect',
   description: '调试连接流程（逐步追踪、计时、状态快照）',
   category: '诊断工具',
   args: [

@@ -63,12 +63,12 @@ loadPersistedConfig(ctx);
  * 不需要 daemon 的命令（可以本地直接执行）
  */
 const LOCAL_COMMANDS = new Set([
-  'check_environment',
+  'check-env',
   'config',
-  // ide 命令系列
-  'ide open', 'ide login', 'ide islogin', 'ide preview',
-  'ide auto-preview', 'ide upload', 'ide build-npm',
-  'ide auto', 'ide close', 'ide quit', 'ide cache',
+  // ci 命令系列
+  'ci open', 'ci login', 'ci islogin', 'ci preview',
+  'ci auto-preview', 'ci upload', 'ci build-npm',
+  'ci auto', 'ci close', 'ci quit', 'ci cache',
 ]);
 
 /**
@@ -159,10 +159,10 @@ function showHelp(cmdName?: string): string {
   lines.push(`    ${chalk.dim('  日志文件: /tmp/wx-devtools-cli.log')}`);
   lines.push('');
 
-  lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/to/project'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/b --session s2'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli get_page_snapshot --session s2'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli list_sessions --probe'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli open /path/to/project'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli open /path/b --session s2'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli snapshot --session s2'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli sessions --probe'));
   lines.push('');
 
   return lines.join('\n');
@@ -418,7 +418,7 @@ async function autoConnect(): Promise<void> {
   if (!project) return;
 
   console.log(out.dim(`  自动连接: ${project}...`));
-  const connectCmd = registry.get('connect');
+  const connectCmd = registry.get('open');
   if (!connectCmd) return;
 
   try {
@@ -426,7 +426,7 @@ async function autoConnect(): Promise<void> {
     console.log(result);
   } catch (e: any) {
     console.log(out.warn(`自动连接失败: ${e.message}`));
-    console.log(out.dim('  可手动执行 connect --project /path'));
+    console.log(out.dim('  可手动执行 open --project /path'));
   }
   console.log('');
 }
@@ -559,7 +559,7 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
         } catch {}
       } else {
         console.log(out.warn('daemon 未运行'));
-        console.log(out.dim('  使用 wx-devtools-cli connect <project> 启动'));
+        console.log(out.dim('  使用 wx-devtools-cli open <project> 启动'));
       }
       break;
     }
@@ -588,9 +588,9 @@ const argv = rawArgv;
 
 logger.debug('入口分支判断', { first: argv[0], len: argv.length });
 
-if (argv[0] === 'connect' && argv.length >= 2) {
-  // ======= wx-devtools-cli connect <project_path> [options...] =======
-  // 启动 daemon（如果没运行），然后发送 connect 命令
+if (argv[0] === 'open' && argv.length >= 2) {
+  // ======= wx-devtools-cli open <project_path> [options...] =======
+  // 启动 daemon（如果没运行），然后发送 open 命令
   const projectPath = argv[1];
   const restArgs = argv.slice(2);
 
@@ -630,7 +630,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
 
       // 发送连接命令
       const connectArgs = { project: projectPath, ...extraArgs };
-      const resp = await sendCommand('connect', connectArgs, undefined, sessionId);
+      const resp = await sendCommand('open', connectArgs, undefined, sessionId);
       if (resp.ok) {
         if (resp.output) console.log(resp.output);
       } else {
@@ -643,8 +643,8 @@ if (argv[0] === 'connect' && argv.length >= 2) {
     }
   })();
 
-} else if (argv[0] === 'disconnect') {
-  // ======= wx-devtools-cli disconnect [--session <id>] =======
+} else if (argv[0] === 'close') {
+  // ======= wx-devtools-cli close [--session <id>] =======
   (async () => {
     const running = await isDaemonRunning();
     if (!running) {
@@ -658,7 +658,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
     const sessionId = resolved?.sessionId || process.env.WX_SESSION || undefined;
     const cmdArgs = resolved?.args || {};
 
-    const resp = await sendCommand('disconnect', cmdArgs, undefined, sessionId);
+    const resp = await sendCommand('close', cmdArgs, undefined, sessionId);
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
     } else {
@@ -729,7 +729,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
     (async () => {
       const running = await isDaemonRunning();
       if (!running) {
-        console.log(out.error('daemon 未运行，请先执行 wx-devtools-cli connect <project_path>'));
+        console.log(out.error('daemon 未运行，请先执行 wx-devtools-cli open <project_path>'));
         process.exit(1);
       }
 

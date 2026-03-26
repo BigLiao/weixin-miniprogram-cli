@@ -1,6 +1,6 @@
 /**
  * 网络监控命令组 (4个)
- * list_network_requests, get_network_request, stop_network_monitoring, clear_network_requests
+ * network, network-detail, network-stop, network-clear
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -53,7 +53,7 @@ async function syncNetworkLogs(ctx: any): Promise<void> {
 }
 
 export const listNetworkRequests: CommandDef = defineCommand({
-  name: 'list_network_requests',
+  name: 'network',
   description: '列出网络请求（短格式，支持分页和过滤）',
   category: '网络监控',
   args: [
@@ -122,11 +122,11 @@ export const listNetworkRequests: CommandDef = defineCommand({
 });
 
 export const getNetworkRequest: CommandDef = defineCommand({
-  name: 'get_network_request',
+  name: 'network-detail',
   description: '获取网络请求详情（通过 reqid）',
   category: '网络监控',
   args: [
-    { name: 'reqid', type: 'string', required: true, description: '请求 ID（来自 list_network_requests）' },
+    { name: 'reqid', type: 'string', required: true, description: '请求 ID（来自 network）' },
   ],
   handler: async (args, ctx) => {
     // 先同步
@@ -183,7 +183,7 @@ export const getNetworkRequest: CommandDef = defineCommand({
 });
 
 export const stopNetworkMonitoring: CommandDef = defineCommand({
-  name: 'stop_network_monitoring',
+  name: 'network-stop',
   description: '停止网络监控',
   category: '网络监控',
   args: [
@@ -218,7 +218,7 @@ export const stopNetworkMonitoring: CommandDef = defineCommand({
 });
 
 export const clearNetworkRequests: CommandDef = defineCommand({
-  name: 'clear_network_requests',
+  name: 'network-clear',
   description: '清除已收集的网络请求日志',
   category: '网络监控',
   args: [

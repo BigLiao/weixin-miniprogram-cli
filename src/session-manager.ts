@@ -74,7 +74,7 @@ export class SessionManager {
     if (explicitId) {
       const s = this.sessions.get(explicitId);
       if (!s) {
-        throw new Error(`Session "${explicitId}" 不存在。使用 list_sessions 查看所有 session`);
+        throw new Error(`Session "${explicitId}" 不存在。使用 sessions 查看所有 session`);
       }
       return s;
     }
@@ -95,14 +95,14 @@ export class SessionManager {
 
     // 4. 没有 session
     if (all.length === 0) {
-      throw new Error('没有可用的 session。请先执行 connect');
+      throw new Error('没有可用的 session。请先执行 open');
     }
 
     // 5. 多个 session，无法自动选择
     const ids = all.map(s => s.id).join(', ');
     throw new Error(
       `存在多个 session (${ids})，无法自动选择。` +
-      '请使用 --session <id> 指定，或 switch_session --id <id> 切换默认 session'
+      '请使用 --session <id> 指定，或 switch-session --id <id> 切换默认 session'
     );
   }
 

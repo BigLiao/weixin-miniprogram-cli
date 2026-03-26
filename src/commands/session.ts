@@ -1,6 +1,6 @@
 /**
  * Session 管理命令组 (2个)
- * list_sessions, switch_session
+ * sessions, switch-session
  *
  * 采用工厂模式：静态占位 defs 用于 help 显示，daemon 启动时用工厂创建真实实现覆盖。
  */
@@ -12,7 +12,7 @@ import * as out from '../utils/output.js';
 // ==================== 共享元数据（消除占位 / 工厂双份定义） ====================
 
 const listSessionsMeta = {
-  name: 'list_sessions',
+  name: 'sessions',
   description: '列出所有 session（小程序连接）',
   category: 'Session 管理',
   args: [
@@ -22,7 +22,7 @@ const listSessionsMeta = {
 };
 
 const switchSessionMeta = {
-  name: 'switch_session',
+  name: 'switch-session',
   description: '切换默认活跃 session',
   category: 'Session 管理',
   args: [
@@ -59,7 +59,7 @@ export function createSessionCommands(sessionMgr: SessionManager): CommandDef[] 
       }
 
       if (sessions.length === 0) {
-        return out.dim('没有活跃的 session。使用 connect 创建连接');
+        return out.dim('没有活跃的 session。使用 open 创建连接');
       }
 
       // --probe: 对 connected session 探活

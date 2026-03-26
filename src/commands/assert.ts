@@ -1,13 +1,13 @@
 /**
  * 断言验证命令组 (3个)
- * assert_text, assert_attribute, assert_state
+ * assert-text, assert-attr, assert-state
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
 export const assertText: CommandDef = defineCommand({
-  name: 'assert_text',
+  name: 'assert-text',
   description: '断言元素文本内容',
   category: '断言验证',
   args: [
@@ -47,7 +47,7 @@ export const assertText: CommandDef = defineCommand({
 });
 
 export const assertAttribute: CommandDef = defineCommand({
-  name: 'assert_attribute',
+  name: 'assert-attr',
   description: '断言元素属性值',
   category: '断言验证',
   args: [
@@ -68,7 +68,7 @@ export const assertAttribute: CommandDef = defineCommand({
 });
 
 export const assertState: CommandDef = defineCommand({
-  name: 'assert_state',
+  name: 'assert-state',
   description: '断言元素状态（可见性、启用、选中、焦点）',
   category: '断言验证',
   args: [

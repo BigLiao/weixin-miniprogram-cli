@@ -1,13 +1,13 @@
 /**
  * Console 监控命令组 (2个)
- * list_console_messages, get_console_message
+ * console, console-detail
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
 export const listConsoleMessages: CommandDef = defineCommand({
-  name: 'list_console_messages',
+  name: 'console',
   description: '列出 Console 消息（短格式，支持分页和过滤）',
   category: 'Console 监控',
   args: [
@@ -17,7 +17,7 @@ export const listConsoleMessages: CommandDef = defineCommand({
   ],
   handler: async (args, ctx) => {
     if (!ctx.consoleListening) {
-      return out.warn('Console 监听未启动。请先连接开发者工具 (connect 会自动启动)');
+      return out.warn('Console 监听未启动。请先连接开发者工具 (open 会自动启动)');
     }
 
     let messages = [...ctx.consoleMessages];
@@ -68,11 +68,11 @@ export const listConsoleMessages: CommandDef = defineCommand({
 });
 
 export const getConsoleMessage: CommandDef = defineCommand({
-  name: 'get_console_message',
+  name: 'console-detail',
   description: '获取 Console 消息详情（通过 msgid）',
   category: 'Console 监控',
   args: [
-    { name: 'msgid', type: 'number', required: true, description: '消息 ID（来自 list_console_messages）' },
+    { name: 'msgid', type: 'number', required: true, description: '消息 ID（来自 console）' },
   ],
   handler: async (args, ctx) => {
     const msg = ctx.consoleMessages.find(m => m.msgid === args.msgid);

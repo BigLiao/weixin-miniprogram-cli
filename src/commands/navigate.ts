@@ -1,13 +1,13 @@
 /**
- * 页面导航命令组 (4个)
- * navigate_to, navigate_back, switch_tab, relaunch
+ * 页面导航命令组 (5个)
+ * goto, go-back, switch-tab, relaunch, scroll
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
 export const navigateTo: CommandDef = defineCommand({
-  name: 'navigate_to',
+  name: 'goto',
   description: '导航到指定页面',
   category: '页面导航',
   args: [
@@ -50,7 +50,7 @@ export const navigateTo: CommandDef = defineCommand({
 });
 
 export const navigateBack: CommandDef = defineCommand({
-  name: 'navigate_back',
+  name: 'go-back',
   description: '返回上一页',
   category: '页面导航',
   args: [
@@ -74,7 +74,7 @@ export const navigateBack: CommandDef = defineCommand({
 });
 
 export const switchTab: CommandDef = defineCommand({
-  name: 'switch_tab',
+  name: 'switch-tab',
   description: '切换到指定 Tab 页面',
   category: '页面导航',
   args: [
@@ -136,9 +136,46 @@ export const relaunch: CommandDef = defineCommand({
   },
 });
 
+export const scroll: CommandDef = defineCommand({
+  name: 'scroll',
+  description: '滚动页面到指定位置',
+  category: '页面导航',
+  args: [
+    { name: 'scrollTop', type: 'number', required: true, description: '滚动到的位置（px）' },
+    { name: 'duration', type: 'number', default: 300, description: '滚动动画时长(ms)' },
+  ],
+  handler: async (args, ctx) => {
+    ctx.ensureConnected();
+
+    try {
+      const scrollTop = args.scrollTop;
+      const duration = args.duration || 300;
+
+      await ctx.miniProgram!.evaluate(
+        (params: { scrollTop: number; duration: number }) => {
+          // @ts-ignore
+          wx.pageScrollTo({
+            scrollTop: params.scrollTop,
+            duration: params.duration,
+          });
+        },
+        { scrollTop, duration },
+      );
+
+      // 等待滚动动画完成
+      await new Promise(r => setTimeout(r, duration + 100));
+
+      return out.success(`滚动到: ${scrollTop}px`);
+    } catch (e: any) {
+      return out.error(`滚动失败: ${e.message}`);
+    }
+  },
+});
+
 export const navigateCommands: CommandDef[] = [
   navigateTo,
   navigateBack,
   switchTab,
   relaunch,
+  scroll,
 ];

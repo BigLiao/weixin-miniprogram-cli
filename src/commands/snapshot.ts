@@ -1,6 +1,6 @@
 /**
  * 页面快照命令 (1个)
- * get_page_snapshot
+ * snapshot
  *
  * 支持两种模式:
  * - tree（默认）: 通过 outerWxml() 获取 DOM 树结构，解析为层级格式
@@ -35,7 +35,7 @@ const MEDIA_URL_ATTRS: Record<string, string[]> = {
 };
 
 export const getPageSnapshot: CommandDef = defineCommand({
-  name: 'get_page_snapshot',
+  name: 'snapshot',
   description: '获取当前页面元素快照（生成 UID 供其他命令引用）',
   category: '页面快照',
   args: [
