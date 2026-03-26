@@ -19,8 +19,20 @@ interface ElementSnapshot {
   text?: string;
   className?: string;
   id?: string;
+  urls?: Record<string, string>;
   position?: { left: number; top: number; width: number; height: number };
 }
+
+/** 媒体元素标签 → 对应的 URL 属性名 */
+const MEDIA_URL_ATTRS: Record<string, string[]> = {
+  'image': ['src'],
+  'img': ['src'],
+  'video': ['src', 'poster'],
+  'audio': ['src'],
+  'cover-image': ['src'],
+  'live-player': ['src'],
+  'live-pusher': ['url'],
+};
 
 export const getPageSnapshot: CommandDef = defineCommand({
   name: 'get_page_snapshot',
@@ -225,6 +237,20 @@ async function getFlatSnapshot(
       if (text && text.trim()) snap.text = text.trim().slice(0, 100);
       if (className) snap.className = String(className).trim();
       if (id) snap.id = id;
+
+      // 媒体元素获取 URL 属性
+      const mediaAttrs = MEDIA_URL_ATTRS[tagName];
+      if (mediaAttrs) {
+        const urls: Record<string, string> = {};
+        for (const attr of mediaAttrs) {
+          try {
+            const val = await element.attribute(attr).catch(() => '');
+            if (val) urls[attr] = val;
+          } catch {}
+        }
+        if (Object.keys(urls).length > 0) snap.urls = urls;
+      }
+
       if (size && offset) {
         snap.position = {
           left: Math.round(offset.left),
@@ -252,13 +278,19 @@ async function getFlatSnapshot(
   } else if (format === 'minimal') {
     for (const el of elements) {
       const textPart = el.text ? ` "${truncate(el.text, 40)}"` : '';
-      lines.push(`  ${out.highlight(el.uid)} ${el.tagName}${textPart}`);
+      const urlPart = formatUrls(el.urls);
+      lines.push(`  ${out.highlight(el.uid)} ${el.tagName}${textPart}${urlPart}`);
     }
   } else {
     // compact（默认）
     for (const el of elements) {
       const parts = [`uid=${out.highlight(el.uid)}`, el.tagName];
       if (el.text) parts.push(`"${truncate(el.text, 40)}"`);
+      if (el.urls) {
+        for (const [attr, val] of Object.entries(el.urls)) {
+          parts.push(`${attr}=${val}`);
+        }
+      }
       if (args.includePosition && el.position) {
         parts.push(`pos=[${el.position.left},${el.position.top}]`);
         parts.push(`size=[${el.position.width}x${el.position.height}]`);
@@ -268,6 +300,12 @@ async function getFlatSnapshot(
   }
 
   return lines;
+}
+
+function formatUrls(urls?: Record<string, string>): string {
+  if (!urls) return '';
+  const parts = Object.entries(urls).map(([attr, val]) => `${attr}=${val}`);
+  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 }
 
 function truncate(text: string, max: number): string {

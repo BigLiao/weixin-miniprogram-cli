@@ -41,9 +41,13 @@ export class SharedContext {
   consoleListening: boolean = false;
   networkListening: boolean = false;
   lastConnectionParams: Record<string, any> | null = null;
+  /** 小程序所有页面路径（来自 __wxConfig.pages） */
+  appPages: string[] = [];
+  /** 小程序 tabBar 配置（来自 __wxConfig.tabBar） */
+  appTabBar: any | null = null;
   /** IDE CLI 路径（用户手动设置或自动检测） */
   cliPath: string | null = null;
-  /** 默认项目路径（来自 connect_devtools 或 config 设置） */
+  /** 默认项目路径（来自 connect 或 config 设置） */
   defaultProject: string | null = null;
   private consoleMsgId: number = 0;
   private networkReqId: number = 0;
@@ -51,7 +55,7 @@ export class SharedContext {
   /** 检查是否已连接 */
   ensureConnected(): void {
     if (!this.miniProgram) {
-      throw new Error('未连接到微信开发者工具。请先执行 connect_devtools');
+      throw new Error('未连接到微信开发者工具。请先执行 connect');
     }
   }
 
@@ -122,6 +126,8 @@ export class SharedContext {
     this.networkRequests = [];
     this.consoleListening = false;
     this.networkListening = false;
+    this.appPages = [];
+    this.appTabBar = null;
     this.consoleMsgId = 0;
     this.networkReqId = 0;
   }

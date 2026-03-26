@@ -1,6 +1,6 @@
 /**
  * 连接管理命令组 (4个)
- * connect_devtools, reconnect_devtools, disconnect_devtools, status
+ * connect, reconnect, disconnect, status
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -99,8 +99,45 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
   return logs;
 }
 
+/**
+ * 获取小程序路由信息（pages、tabBar）
+ * 通过运行时 __wxConfig 读取 app.json 配置
+ */
+async function initAppInfo(ctx: SharedContext): Promise<string[]> {
+  const lines: string[] = [];
+  try {
+    const config = await ctx.miniProgram!.evaluate(() => {
+      return {
+        // @ts-ignore
+        pages: __wxConfig.pages || [],
+        // @ts-ignore
+        tabBar: __wxConfig.tabBar || null,
+      };
+    });
+
+    // 存到 ctx 供后续命令使用
+    ctx.appPages = config.pages || [];
+    ctx.appTabBar = config.tabBar || null;
+
+    // LLM 友好的极简输出
+    lines.push(`[Pages] ${config.pages.join(', ')}`);
+
+    if (config.tabBar?.list?.length) {
+      const tabs = config.tabBar.list.map((t: any) => t.pagePath).join(', ');
+      lines.push(`[TabBar] ${tabs}`);
+    }
+
+    // 当前页面
+    const curPage = ctx.currentPage?.path || 'unknown';
+    lines.push(`[Current] ${curPage}`);
+  } catch (e: any) {
+    lines.push(`[Init] 获取路由信息失败: ${e.message}`);
+  }
+  return lines;
+}
+
 export const connectDevtools: CommandDef = defineCommand({
-  name: 'connect_devtools',
+  name: 'connect',
   description: '连接到微信开发者工具（支持多种策略）',
   category: '连接管理',
   args: [
@@ -158,6 +195,12 @@ export const connectDevtools: CommandDef = defineCommand({
       for (const log of monitorLogs) {
         lines.push(out.dim(`  ${log}`));
       }
+
+      // 获取小程序路由信息
+      const initLogs = await initAppInfo(ctx);
+      for (const log of initLogs) {
+        lines.push(`  ${log}`);
+      }
     } catch (e: any) {
       lines.push(out.error(`连接失败: ${e.message}`));
       if (args.verbose && e.stack) {
@@ -170,7 +213,7 @@ export const connectDevtools: CommandDef = defineCommand({
 });
 
 export const reconnectDevtools: CommandDef = defineCommand({
-  name: 'reconnect_devtools',
+  name: 'reconnect',
   description: '重新连接到微信开发者工具（复用上次连接参数）',
   category: '连接管理',
   args: [
@@ -179,7 +222,7 @@ export const reconnectDevtools: CommandDef = defineCommand({
   ],
   handler: async (args, ctx) => {
     if (!ctx.lastConnectionParams && !args.project && !args.ws) {
-      return out.error('没有上次的连接参数，请使用 connect_devtools');
+      return out.error('没有上次的连接参数，请使用 connect');
     }
 
     // 先断开
@@ -195,7 +238,7 @@ export const reconnectDevtools: CommandDef = defineCommand({
 });
 
 export const disconnectDevtools: CommandDef = defineCommand({
-  name: 'disconnect_devtools',
+  name: 'disconnect',
   description: '断开与微信开发者工具的连接',
   category: '连接管理',
   args: [],

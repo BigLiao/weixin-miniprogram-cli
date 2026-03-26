@@ -23,7 +23,6 @@ import {
   startDaemon,
   stopDaemon,
   getDaemonPid,
-  type DaemonResponse,
 } from './client.js';
 
 // 注册所有命令（用于 REPL 模式和本地执行）
@@ -70,6 +69,25 @@ function isLocalCommand(command: string, positionalArgs?: string[]): boolean {
 
 // ==================== 内置命令 ====================
 
+/**
+ * 构建参数简介行（用于命令总览）
+ */
+function buildArgsSummary(cmd: CommandDef): string {
+  if (cmd.args.length === 0) return '';
+  const parts: string[] = [];
+  for (const arg of cmd.args) {
+    if (arg.required) {
+      parts.push(`<${arg.name}>*`);
+    } else {
+      parts.push(`--${arg.name}`);
+    }
+    if (arg.alias) {
+      parts.push(`-${arg.alias}`);
+    }
+  }
+  return parts.join('  ');
+}
+
 function showHelp(cmdName?: string): string {
   if (cmdName) {
     const cmd = registry.get(cmdName);
@@ -91,6 +109,10 @@ function showHelp(cmdName?: string): string {
     lines.push(chalk.yellow(`  ${category}:`));
     for (const cmd of cmds) {
       lines.push(`    ${chalk.cyan(cmd.name.padEnd(28))} ${chalk.dim(cmd.description)}`);
+      const argsSummary = buildArgsSummary(cmd);
+      if (argsSummary) {
+        lines.push(`    ${' '.repeat(28)} ${chalk.dim(argsSummary)}`);
+      }
     }
     lines.push('');
   }
@@ -108,7 +130,7 @@ function showHelp(cmdName?: string): string {
   lines.push('');
   lines.push(chalk.dim('  示例: wx-devtools-cli connect /path/to/project'));
   lines.push(chalk.dim('  示例: wx-devtools-cli get_page_snapshot'));
-  lines.push(chalk.dim('  示例: wx-devtools-cli click --uid "button.submit"'));
+  lines.push(chalk.dim('  示例: wx-devtools-cli click button.submit'));
   lines.push(chalk.dim('  示例: wx-devtools-cli ide open --project /path'));
   lines.push('');
 
@@ -149,6 +171,18 @@ function formatCommandHelp(cmd: CommandDef): string {
 }
 
 function buildExample(cmd: CommandDef): string {
+  const requiredArgs = cmd.args.filter(a => a.required);
+
+  // 如果只有一个必填参数，使用位置参数形式
+  if (requiredArgs.length === 1) {
+    const arg = requiredArgs[0];
+    switch (arg.type) {
+      case 'string': return `${cmd.name} "value"`;
+      case 'number': return `${cmd.name} 123`;
+      default: return `${cmd.name} --${arg.name} "value"`;
+    }
+  }
+
   const parts = [cmd.name];
   for (const arg of cmd.args) {
     if (arg.required) {
@@ -163,58 +197,75 @@ function buildExample(cmd: CommandDef): string {
   return parts.join(' ');
 }
 
-// ==================== Daemon 模式命令执行 ====================
+// ==================== 命令解析公共逻辑 ====================
+
+interface ResolvedCommand {
+  cmd: CommandDef;
+  args: Record<string, any>;
+}
 
 /**
- * 解析完整命令名（处理命名空间如 "ide open"）
+ * 解析输入 → 匹配注册命令（含命名空间）→ 位置参数映射 → 类型转换
+ * 返回 null 表示未找到命令（已输出错误信息）
  */
-function resolveCommandName(command: string, positionalArgs?: string[]): string {
-  // 先尝试直接匹配
-  if (registry.get(command)) return command;
-  // 尝试命名空间
-  if (positionalArgs && positionalArgs.length > 0) {
-    const nsCommand = `${command} ${positionalArgs[0]}`;
-    if (registry.get(nsCommand)) return nsCommand;
+function resolveCommand(input: string, options?: { silent?: boolean }): ResolvedCommand | null {
+  const { command, args } = parseCommand(input);
+  if (!command) return null;
+
+  // 1. 查找命令（支持 "ide open" 等命名空间形式）
+  let cmd = registry.get(command);
+  let finalArgs = { ...args };
+
+  if (!cmd && args._positional?.length) {
+    const nsCommand = `${command} ${args._positional[0]}`;
+    cmd = registry.get(nsCommand);
+    if (cmd) {
+      // 消费第一个位置参数作为子命令
+      finalArgs._positional = args._positional.slice(1);
+      if (finalArgs._positional.length === 0) delete finalArgs._positional;
+    }
   }
-  return command;
+
+  if (!cmd) {
+    if (!options?.silent) {
+      console.log(out.error(`未知命令: ${command}`));
+      console.log(out.dim('  输入 help 查看所有可用命令'));
+    }
+    return null;
+  }
+
+  // 2. 位置参数自动映射（仅单必填参数命令）
+  if (finalArgs._positional?.length) {
+    const requiredArgs = cmd.args.filter(a => a.required);
+    if (requiredArgs.length === 1 && finalArgs[requiredArgs[0].name] === undefined) {
+      finalArgs[requiredArgs[0].name] = finalArgs._positional[0];
+    }
+  }
+
+  // 3. 清理 _positional，做类型转换
+  delete finalArgs._positional;
+  const coerced = coerceArgs(finalArgs, cmd.args);
+
+  return { cmd, args: coerced };
 }
+
+// ==================== Daemon 模式命令执行 ====================
 
 /**
  * 通过 daemon 执行命令
  */
 async function executeDaemonCommand(input: string): Promise<void> {
-  const { command, args } = parseCommand(input);
-  if (!command) return;
-
-  // 解析完整命令名
-  let fullCommand = command;
-  let finalArgs = { ...args };
-  delete finalArgs._positional;
-
-  if (!registry.get(command) && args._positional && args._positional.length > 0) {
-    const nsCommand = `${command} ${args._positional[0]}`;
-    if (registry.get(nsCommand)) {
-      fullCommand = nsCommand;
-      // 移除已消费的位置参数
-      const remaining = args._positional.slice(1);
-      finalArgs = { ...args, _positional: remaining.length > 0 ? remaining : undefined };
-      if (!finalArgs._positional) delete finalArgs._positional;
-    }
+  let resolved: ResolvedCommand | null;
+  try {
+    resolved = resolveCommand(input);
+  } catch (e: any) {
+    console.log(out.error(e.message));
+    return;
   }
-
-  // 对已注册命令做参数类型转换
-  const cmd = registry.get(fullCommand);
-  if (cmd) {
-    try {
-      finalArgs = coerceArgs(finalArgs, cmd.args);
-    } catch (e: any) {
-      console.log(out.error(e.message));
-      return;
-    }
-  }
+  if (!resolved) return;
 
   try {
-    const resp = await sendCommand(fullCommand, finalArgs);
+    const resp = await sendCommand(resolved.cmd.name, resolved.args);
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
     } else {
@@ -228,33 +279,18 @@ async function executeDaemonCommand(input: string): Promise<void> {
 // ==================== 本地命令执行（不需要 daemon）====================
 
 async function executeLocalCommand(input: string): Promise<void> {
-  const { command, args } = parseCommand(input);
-  if (!command) return;
-
-  // 查找注册的命令（支持命名空间）
-  let cmd = registry.get(command);
-  let finalArgs = args;
-
-  if (!cmd && args._positional && args._positional.length > 0) {
-    const nsCommand = `${command} ${args._positional[0]}`;
-    cmd = registry.get(nsCommand);
-    if (cmd) {
-      finalArgs = { ...args, _positional: args._positional.slice(1) };
-    }
-  }
-
-  if (!cmd) {
-    console.log(out.error(`未知命令: ${command}`));
-    console.log(out.dim('  输入 help 查看所有可用命令'));
+  let resolved: ResolvedCommand | null;
+  try {
+    resolved = resolveCommand(input);
+  } catch (e: any) {
+    console.log(out.error(e.message));
     return;
   }
+  if (!resolved) return;
 
   try {
-    const coerced = coerceArgs(finalArgs, cmd.args);
-    const result = await cmd.handler(coerced, ctx);
-    if (result) {
-      console.log(result);
-    }
+    const result = await resolved.cmd.handler(resolved.args, ctx);
+    if (result) console.log(result);
   } catch (e: any) {
     console.log(out.error(e.message));
   }
@@ -308,30 +344,19 @@ async function executeReplCommand(input: string): Promise<void> {
       return;
   }
 
-  // 查找注册的命令（支持命名空间）
-  let cmd = registry.get(command);
-  let finalArgs = args;
-
-  if (!cmd && args._positional && args._positional.length > 0) {
-    const nsCommand = `${command} ${args._positional[0]}`;
-    cmd = registry.get(nsCommand);
-    if (cmd) {
-      finalArgs = { ...args, _positional: args._positional.slice(1) };
-    }
-  }
-
-  if (!cmd) {
-    console.log(out.error(`未知命令: ${command}`));
-    console.log(out.dim('  输入 help 查看所有可用命令'));
+  // 查找注册的命令，解析参数
+  let resolved: ResolvedCommand | null;
+  try {
+    resolved = resolveCommand(input);
+  } catch (e: any) {
+    console.log(out.error(e.message));
     return;
   }
+  if (!resolved) return;
 
   try {
-    const coerced = coerceArgs(finalArgs, cmd.args);
-    const result = await cmd.handler(coerced, ctx);
-    if (result) {
-      console.log(result);
-    }
+    const result = await resolved.cmd.handler(resolved.args, ctx);
+    if (result) console.log(result);
   } catch (e: any) {
     console.log(out.error(e.message));
   }
@@ -343,7 +368,7 @@ async function autoConnect(): Promise<void> {
   if (!project) return;
 
   console.log(out.dim(`  自动连接: ${project}...`));
-  const connectCmd = registry.get('connect_devtools');
+  const connectCmd = registry.get('connect');
   if (!connectCmd) return;
 
   try {
@@ -351,7 +376,7 @@ async function autoConnect(): Promise<void> {
     console.log(result);
   } catch (e: any) {
     console.log(out.warn(`自动连接失败: ${e.message}`));
-    console.log(out.dim('  可手动执行 connect_devtools --project /path'));
+    console.log(out.dim('  可手动执行 connect --project /path'));
   }
   console.log('');
 }
@@ -507,7 +532,7 @@ const argv = process.argv.slice(2);
 
 if (argv[0] === 'connect' && argv.length >= 2) {
   // ======= wx-devtools-cli connect <project_path> [options...] =======
-  // 启动 daemon（如果没运行），然后发送 connect_devtools 命令
+  // 启动 daemon（如果没运行），然后发送 connect 命令
   const projectPath = argv[1];
   const restArgs = argv.slice(2);
 
@@ -542,7 +567,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
 
       // 发送连接命令
       const connectArgs = { project: projectPath, ...extraArgs };
-      const resp = await sendCommand('connect_devtools', connectArgs);
+      const resp = await sendCommand('connect', connectArgs);
       if (resp.ok) {
         if (resp.output) console.log(resp.output);
       } else {
@@ -563,7 +588,7 @@ if (argv[0] === 'connect' && argv.length >= 2) {
       console.log(out.warn('daemon 未运行'));
       process.exit(0);
     }
-    const resp = await sendCommand('disconnect_devtools', {});
+    const resp = await sendCommand('disconnect', {});
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
     } else {

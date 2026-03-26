@@ -10,6 +10,17 @@ import { type WxmlNode } from './wxml-parser.js';
 /** 需要跳过的无意义容器标签（不生成 UID） */
 const SKIP_TAGS = new Set(['page', 'body']);
 
+/** 媒体元素标签 → 对应的 URL 属性名 */
+const MEDIA_URL_ATTRS: Record<string, string[]> = {
+  'image': ['src'],
+  'img': ['src'],
+  'video': ['src', 'poster'],
+  'audio': ['src'],
+  'cover-image': ['src'],
+  'live-player': ['src'],
+  'live-pusher': ['url'],
+};
+
 /**
  * 从 WxmlNode 树生成 UID 映射
  * @param nodes - 解析后的 WXML 节点树
@@ -109,8 +120,9 @@ export function formatSnapshotTree(
 
     const textPart = node.text ? ` "${truncateText(node.text, 40)}"` : '';
     const uidPart = uid ? `[${uid}]` : '';
+    const urlPart = getMediaUrlPart(node);
 
-    lines.push(`${indent}${uidPart}${textPart}`);
+    lines.push(`${indent}${uidPart}${textPart}${urlPart}`);
 
     // 深度限制
     if (depth >= maxDepth) {
@@ -161,6 +173,21 @@ export function formatSnapshotCompact(node: any, depth: number = 0): string {
   }
 
   return result;
+}
+
+/**
+ * 提取媒体元素的 URL 属性，拼接为后缀字符串
+ */
+function getMediaUrlPart(node: WxmlNode): string {
+  const attrNames = MEDIA_URL_ATTRS[node.tagName];
+  if (!attrNames || !node.attributes) return '';
+
+  const urls: string[] = [];
+  for (const attr of attrNames) {
+    const val = node.attributes[attr];
+    if (val) urls.push(`${attr}=${val}`);
+  }
+  return urls.length > 0 ? ` (${urls.join(', ')})` : '';
 }
 
 function truncateText(text: string, max: number = 50): string {
