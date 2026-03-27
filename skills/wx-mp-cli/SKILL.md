@@ -80,11 +80,7 @@ wx-mp-cli click "item.row" --dblClick
 wx-mp-cli fill "input.username" --text "hello"
 wx-mp-cli fill "input.search" --text "query" --clear
 wx-mp-cli value "input.username"
-wx-mp-cli set-value "picker.date" --value "2025-01-01"
 wx-mp-cli hover "view.card"
-wx-mp-cli press "Enter"
-wx-mp-cli press "Backspace"
-wx-mp-cli drag --fromUid "item.1" --toUid "item.3"
 ```
 
 ### 导航

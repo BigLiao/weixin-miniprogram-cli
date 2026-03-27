@@ -1,6 +1,6 @@
 /**
  * 测试: 交互操作
- * click, fill, value, set-value, hover, press, drag
+ * click, fill, value, hover
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';
@@ -44,15 +44,6 @@ async function main() {
     }
   });
 
-  await describe('set-value — 错误处理', async () => {
-    try {
-      await run('set-value', { uid: '__nonexistent__', value: '"test"' });
-      assert(false, '不存在的 UID 应抛错');
-    } catch (e) {
-      assert(e.message.includes('未找到 UID'), '应提示 UID 不存在');
-    }
-  });
-
   await describe('hover', async () => {
     if (!uid) { assert(false, '没有可用元素'); return; }
     try {
@@ -60,24 +51,6 @@ async function main() {
       assert(result.includes('长按'), `应成功长按: ${uid}`);
     } catch (e) {
       assert(false, `hover 失败: ${e.message}`);
-    }
-  });
-
-  await describe('press', async () => {
-    try {
-      const result = await run('press', { key: 'Enter' });
-      assert(result.includes('按键'), '应成功触发按键');
-    } catch (e) {
-      assert(false, `press 失败: ${e.message}`);
-    }
-  });
-
-  await describe('drag — 错误处理', async () => {
-    try {
-      await run('drag', { fromUid: '__nonexistent__', toUid: '__nonexistent2__' });
-      assert(false, '不存在的 UID 应抛错');
-    } catch (e) {
-      assert(e.message.includes('未找到'), '应提示元素不存在');
     }
   });
 

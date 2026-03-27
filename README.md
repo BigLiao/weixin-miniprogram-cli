@@ -82,10 +82,7 @@ wx-mp-cli wait --selector ".modal"         # 等待元素出现
 wx-mp-cli click "button.submit"                    # 点击
 wx-mp-cli fill "input.username" --text "test"      # 输入文本
 wx-mp-cli value "input.username"                   # 读取值
-wx-mp-cli set-value "picker.date" --value "2025-01-01"  # 设置表单控件
 wx-mp-cli hover "view.card"                        # 长按
-wx-mp-cli press "Enter"                            # 键盘事件
-wx-mp-cli drag --fromUid "item.1" --toUid "item.3" # 拖拽
 ```
 
 ### 导航
