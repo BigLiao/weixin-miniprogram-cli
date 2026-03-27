@@ -1,10 +1,16 @@
 ---
 name: wx-mp-cli
-description: 微信小程序自动化 CLI 工具。当用户需要操控小程序页面、点击元素、填写表单、截图、执行测试、提取页面信息时使用。
+description: 微信小程序自动化 CLI 工具。当需要操控小程序页面、点击元素、填写表单、截图、执行测试、提取页面信息时使用。
 allowed-tools: Bash(wx-mp-cli:*)
 ---
 
 # 用 wx-mp-cli 自动化微信小程序
+
+## 安装（当提示命令不存在时）
+
+```bash
+npm install -g wx-mp-cli
+```
 
 ## 快速上手
 
