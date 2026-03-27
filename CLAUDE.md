@@ -2,11 +2,12 @@
 
 ## 项目概述
 
-wx-mp-cli 是一个微信开发者工具交互式 CLI 控制器，用于 AI Agent 自动化操控微信小程序。
+weixin-miniprogram-cli 是一个微信开发者工具交互式 CLI 控制器，用于 AI Agent 自动化操控微信小程序。
 
 - **语言**: TypeScript (ES Modules)
 - **构建输出**: `build/` 目录
-- **包名**: `wx-mp-cli`
+- **包名**: `weixin-miniprogram-cli`
+- **CLI 命令**: `weixin-miniprogram-cli` 或 `wx-mp-cli`（别名）
 
 ## 常用命令
 

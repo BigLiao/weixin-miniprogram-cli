@@ -1,4 +1,4 @@
-# wx-mp-cli
+# weixin-miniprogram-cli
 
 专为 AI Coding Agent 设计的微信小程序自动化 CLI。配合 Skill 使用，打通开发、测试、部署的全流程。
 
@@ -7,14 +7,14 @@
 推荐通过 npm 全局安装：
 
 ```bash
-npm install -g wx-mp-cli
+npm install -g weixin-miniprogram-cli
 ```
 
 或从源码手动安装：
 
 ```bash
-git clone <repo-url>
-cd wx-mp-cli
+git clone https://github.com/BigLiao/weixin-miniprogram-cli.git
+cd weixin-miniprogram-cli
 npm install && npm run build && npm link
 ```
 
