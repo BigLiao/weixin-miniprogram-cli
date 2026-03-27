@@ -1,15 +1,15 @@
 ---
-name: wx-mp-cli
+name: weixin-miniprogram-cli
 description: 微信小程序自动化 CLI 工具。当需要操控小程序页面、点击元素、填写表单、截图、执行测试、提取页面信息时使用。
 allowed-tools: Bash(wx-mp-cli:*)
 ---
 
 # 用 wx-mp-cli 自动化微信小程序
 
-## 安装（当提示命令不存在时）
+## 安装命令（当提示命令不存在时）
 
 ```bash
-npm install -g wx-mp-cli
+npm install -g weixin-miniprogram-cli
 ```
 
 ## 快速上手
@@ -170,10 +170,6 @@ wx-mp-cli diagnose --project ./my-app
 wx-mp-cli debug-elements
 wx-mp-cli debug-connect --project ./my-app
 ```
-
-## 工作原理
-
-`open` 启动后台 daemon 并建立 miniprogram-automator 连接。后续每条命令通过 Unix Socket 与 daemon 通信，执行后即退出。daemon 在命令间持续维护元素映射、控制台日志和网络记录，空闲 30 分钟后自动退出。
 
 ## 示例：登录流程测试
 
