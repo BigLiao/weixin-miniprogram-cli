@@ -1,9 +1,6 @@
 /**
- * 测试: 页面导航 (4个命令)
- * - goto
- * - go-back
- * - switch-tab
- * - relaunch
+ * 测试: 页面导航
+ * goto, go-back, switch-tab, relaunch, scroll
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';
@@ -25,12 +22,11 @@ async function main() {
   });
 
   await describe('switch-tab', async () => {
-    // miniprogram-demo 的 tab 页面（根据实际配置调整）
     try {
       const result = await run('switch-tab', { url: 'page/component/index' });
       assert(result.includes('切换到') || result.includes('失败'), 'switch-tab 应执行');
     } catch (e) {
-      // 如果不是 tab 页面会失败，这是预期的
+      // 非 tab 页面会失败，属于预期行为
       assert(true, `switch-tab: ${e.message}`);
     }
   });
@@ -38,6 +34,11 @@ async function main() {
   await describe('relaunch', async () => {
     const result = await run('relaunch', { url: 'page/component/index' });
     assert(result.includes('重启'), '应重启成功');
+  });
+
+  await describe('scroll', async () => {
+    const result = await run('scroll', { scrollTop: 200, duration: 100 });
+    assert(result.includes('滚动'), '应滚动成功');
   });
 
   const ok = summary();

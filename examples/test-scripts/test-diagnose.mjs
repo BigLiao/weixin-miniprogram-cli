@@ -1,9 +1,6 @@
 /**
- * 测试: 诊断工具 (4个命令)
- * - check-env
- * - diagnose
- * - debug-elements
- * - debug-connect
+ * 测试: 诊断工具
+ * check-env, diagnose, debug-elements, debug-connect
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';

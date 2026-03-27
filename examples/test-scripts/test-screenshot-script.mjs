@@ -1,7 +1,6 @@
 /**
- * 测试: 截图 + 脚本执行 (2个命令)
- * - screenshot
- * - eval
+ * 测试: 截图 + 脚本执行
+ * screenshot, eval
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';

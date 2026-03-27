@@ -1,40 +1,46 @@
 {
   "name": "wx-mp-cli",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "description": "微信开发者工具交互式 CLI 控制器",
   "type": "module",
   "main": "build/cli.js",
+  "types": "build/cli.d.ts",
   "bin": {
     "wx-mp-cli": "./build/cli.js"
   },
+  "files": [
+    "build/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc && chmod +x build/cli.js build/daemon.js",
+    "clean": "rm -rf build",
+    "prebuild": "rm -rf build",
     "watch": "tsc --watch",
     "start": "node build/cli.js",
     "dev": "npx tsx src/cli.ts",
-    "setup": "node examples/setup.mjs",
-    "launch": "node examples/launch.mjs",
-    "launch:skip-login": "node examples/launch.mjs --skip-login",
-    "test:all": "node examples/test-scripts/run-all.mjs",
-    "test:connection": "node examples/test-scripts/test-connection.mjs",
-    "test:page": "node examples/test-scripts/test-page.mjs",
-    "test:input": "node examples/test-scripts/test-input.mjs",
-    "test:navigate": "node examples/test-scripts/test-navigate.mjs",
-    "test:assert": "node examples/test-scripts/test-assert.mjs",
-    "test:console": "node examples/test-scripts/test-console.mjs",
-    "test:network": "node examples/test-scripts/test-network.mjs",
-    "test:screenshot": "node examples/test-scripts/test-screenshot-script.mjs",
-    "test:diagnose": "node examples/test-scripts/test-diagnose.mjs",
-    "test:launch": "node examples/test-scripts/test-launch.mjs",
-    "test:launch:skip-login": "node examples/test-scripts/test-launch.mjs --skip-login"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "wechat",
     "miniprogram",
     "devtools",
     "cli",
-    "automation"
+    "automation",
+    "testing",
+    "ai-agent"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BigLiao/wx-mp-cli.git"
+  },
+  "homepage": "https://github.com/BigLiao/wx-mp-cli#readme",
+  "bugs": {
+    "url": "https://github.com/BigLiao/wx-mp-cli/issues"
+  },
+  "author": "LiaoZhibin",
   "license": "MIT",
   "engines": {
     "node": ">=16.0.0"

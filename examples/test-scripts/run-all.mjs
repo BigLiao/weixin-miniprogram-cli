@@ -25,6 +25,7 @@ const testFiles = [
   'test-console.mjs',
   'test-network.mjs',
   'test-screenshot-script.mjs',
+  'test-storage.mjs',
   'test-diagnose.mjs',
 ];
 

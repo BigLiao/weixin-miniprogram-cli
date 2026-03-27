@@ -1,9 +1,6 @@
 /**
- * 测试: 网络监控 (4个命令)
- * - network
- * - network-detail
- * - network-clear
- * - network-stop
+ * 测试: 网络监控
+ * network, network-detail, network-clear, network-stop
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';

@@ -1,9 +1,6 @@
 /**
- * 测试: 页面查询 + 快照 (4个命令)
- * - page
- * - snapshot
- * - query
- * - wait
+ * 测试: 页面查询 + 快照
+ * page, snapshot, query, wait
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';

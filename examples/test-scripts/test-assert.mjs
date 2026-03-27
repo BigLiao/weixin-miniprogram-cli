@@ -1,8 +1,6 @@
 /**
- * 测试: 断言验证 (3个命令)
- * - assert-text
- * - assert-attr
- * - assert-state
+ * 测试: 断言验证
+ * assert-text, assert-attr, assert-state
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';

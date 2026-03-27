@@ -1,9 +1,6 @@
 /**
- * 测试: 连接管理 (4个命令)
- * - open
- * - status
- * - reconnect
- * - close
+ * 测试: 连接管理
+ * open, status, reconnect, close
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';

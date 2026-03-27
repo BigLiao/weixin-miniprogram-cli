@@ -1,7 +1,6 @@
 /**
- * 测试: Console 监控 (2个命令)
- * - console
- * - console-detail
+ * 测试: Console 监控
+ * console, console-detail
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';
