@@ -1,5 +1,9 @@
 # weixin-miniprogram-cli
 
+[![npm version](https://img.shields.io/npm/v/weixin-miniprogram-cli.svg)](https://www.npmjs.com/package/weixin-miniprogram-cli)
+[![npm downloads](https://img.shields.io/npm/dm/weixin-miniprogram-cli.svg)](https://www.npmjs.com/package/weixin-miniprogram-cli)
+[![license](https://img.shields.io/npm/l/weixin-miniprogram-cli.svg)](https://github.com/BigLiao/weixin-miniprogram-cli/blob/main/LICENSE)
+
 专为 AI Coding Agent 设计的微信小程序自动化 CLI。配合 Skill 使用，打通开发、测试、部署的全流程。
 
 ## 安装
