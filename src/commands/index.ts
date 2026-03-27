@@ -18,6 +18,7 @@ import { ideCommands } from './ide.js';
 import { configCommands } from './config.js';
 import { sessionCommandDefs } from './session.js';
 import { storageCommands } from './storage.js';
+import { skillCommands } from './skill.js';
 
 export const allCommands: CommandDef[] = [
   ...connectionCommands,
@@ -35,4 +36,5 @@ export const allCommands: CommandDef[] = [
   ...configCommands,
   ...sessionCommandDefs,
   ...storageCommands,
+  ...skillCommands,
 ];

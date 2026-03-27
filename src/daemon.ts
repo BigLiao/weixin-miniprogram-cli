@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * mp-cli Daemon 服务
+ * wx-mp-cli Daemon 服务
  * 后台进程，通过 Unix Socket 接收命令，管理多个 session（小程序连接）
  */
 

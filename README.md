@@ -1,159 +1,174 @@
-# mp-cli
+# wx-mp-cli
 
-WeChat Mini-Program automation CLI designed for coding agents.
+专为 AI Coding Agent 设计的微信小程序自动化 CLI。配合 Skill 使用，打通开发、测试、部署的全流程。
 
-Each command is a standalone shell call — no SDK imports, no persistent sessions in your agent's context. Connect once, then `snapshot`, `click`, `fill`, `assert-text` as individual commands. Inspired by [Playwright CLI](https://github.com/anthropics/playwright-cli).
+## 安装
+
+推荐通过 npm 全局安装：
 
 ```bash
-mp-cli open ./my-miniprogram
-mp-cli snapshot                        # get page elements
-mp-cli click "button.submit"           # interact by UID
-mp-cli assert-text ".title" --text "Success"
-mp-cli screenshot --path ./result.png
-mp-cli close
+npm install -g wx-mp-cli
 ```
 
-## Why CLI over SDK?
-
-| | SDK (miniprogram-automator) | mp-cli |
-|---|---|---|
-| Integration | Import library, manage async connections | Shell commands, zero code |
-| Agent compatibility | Requires code generation + execution | Works with any agent that can run shell commands |
-| State management | Agent must hold connection objects | Daemon holds state across commands |
-| Token cost | Load full API schema into context | One-line commands, minimal tokens |
-| Element references | CSS selectors everywhere | `snapshot` → UID → positional arg |
-
-## Install
+或从源码手动安装：
 
 ```bash
 git clone <repo-url>
-cd mp-cli
-npm install && npm run build
+cd wx-mp-cli
+npm install && npm run build && npm link
 ```
 
-**Prerequisites:** Node.js >= 16, [WeChat DevTools](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html) with **Settings → Security → Service Port** enabled.
+**前置条件：** Node.js >= 16，已安装[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)并开启 **设置 → 安全设置 → 服务端口**。
 
-## Commands
 
-Single required parameter is always **positional** — no flag needed. Run `help <command>` for full options.
+## 基本使用
 
-### Connection
+安装完后可以通过命令操作微信开发者工具来实现自动化。
 
 ```bash
-mp-cli open ./my-miniprogram    # Connect (auto-starts daemon)
-mp-cli close                    # Disconnect
-mp-cli reconnect                # Reconnect with previous params
-mp-cli status                   # Connection state
+wx-mp-cli open ./my-miniprogram
+wx-mp-cli snapshot                        # 获取页面元素
+wx-mp-cli click "button.submit"           # 通过 UID 交互
+wx-mp-cli assert-text ".title" --text "成功"
+wx-mp-cli screenshot --path ./result.png
+wx-mp-cli close
 ```
 
-### Snapshot & Query
+
+## 安装 Skill
+
+搭配专用 Skill 使用，实现 AI 完全自动化开发小程序。
+
+通过自带命令可以自动安装 Skill。
 
 ```bash
-mp-cli snapshot                         # Page tree with element UIDs
-mp-cli page                             # Current page info
-mp-cli query ".search-input"            # Find element by selector
-mp-cli wait --selector ".modal"         # Wait for element to appear
+wx-mp-cli install-skill              # 安装到当前项目 .claude/skills/
+wx-mp-cli install-skill --universal  # 安装到 .agent/skills/（跨 agent 通用）
+wx-mp-cli install-skill --global     # 安装到 ~/.claude/skills/（用户全局）
 ```
 
-`snapshot` returns all page elements with auto-generated UIDs. Use UIDs in subsequent commands. Re-run after navigation.
 
-### Interaction
+## 命令一览
+
+执行 `wx-mp-cli help <command>` 查看完整参数。
+
+### 连接
 
 ```bash
-mp-cli click "button.submit"                    # Click
-mp-cli fill "input.username" --text "test"      # Type into input
-mp-cli value "input.username"                   # Get value
-mp-cli set-value "picker.date" --value "2025-01-01"  # Set form control
-mp-cli hover "view.card"                        # Long press
-mp-cli press "Enter"                            # Keyboard event
-mp-cli drag --fromUid "item.1" --toUid "item.3" # Drag
+wx-mp-cli open ./my-miniprogram    # 连接开发者工具（自动启动 daemon）
+wx-mp-cli close                    # 断开连接
+wx-mp-cli reconnect                # 用上次的参数重连
+wx-mp-cli status                   # 查看连接状态
 ```
 
-### Navigation
+### 快照与查询
 
 ```bash
-mp-cli goto "pages/detail/index"        # Navigate to page
-mp-cli go-back                          # Back
-mp-cli switch-tab "pages/home/index"    # Switch tab
-mp-cli relaunch "pages/home/index"      # Restart to page
-mp-cli scroll 500                       # Scroll to position (px)
+wx-mp-cli snapshot                         # 页面元素树 + UID
+wx-mp-cli page                             # 当前页面信息
+wx-mp-cli query ".search-input"            # 按选择器查找元素
+wx-mp-cli wait --selector ".modal"         # 等待元素出现
 ```
 
-### Assertions
+`snapshot` 返回页面所有元素及自动生成的 UID，后续命令用 UID 操作元素。页面跳转后需重新执行。
+
+### 交互
 
 ```bash
-mp-cli assert-text ".title" --text "Hello"              # Exact match
-mp-cli assert-text ".desc" --textContains "welcome"     # Contains
-mp-cli assert-text ".code" --textMatches "v\\d+\\.\\d+"   # Regex
-mp-cli assert-attr ".btn" --key class --value active    # Attribute
-mp-cli assert-state ".modal" --visible                  # Visibility
+wx-mp-cli click "button.submit"                    # 点击
+wx-mp-cli fill "input.username" --text "test"      # 输入文本
+wx-mp-cli value "input.username"                   # 读取值
+wx-mp-cli set-value "picker.date" --value "2025-01-01"  # 设置表单控件
+wx-mp-cli hover "view.card"                        # 长按
+wx-mp-cli press "Enter"                            # 键盘事件
+wx-mp-cli drag --fromUid "item.1" --toUid "item.3" # 拖拽
 ```
 
-### Screenshot & Script
+### 导航
 
 ```bash
-mp-cli screenshot --path ./shot.png     # Capture screenshot
-mp-cli eval "return wx.getSystemInfoSync()"  # Execute JS in page
+wx-mp-cli goto "pages/detail/index"        # 跳转页面
+wx-mp-cli go-back                          # 返回
+wx-mp-cli switch-tab "pages/home/index"    # 切换 Tab
+wx-mp-cli relaunch "pages/home/index"      # 重启到指定页面
+wx-mp-cli scroll 500                       # 滚动到指定位置（px）
 ```
 
-### Console & Network
+### 断言
 
 ```bash
-mp-cli console                          # List console messages
-mp-cli console --types error            # Filter by type
-mp-cli console-detail 5                 # Message details by ID
-mp-cli network                          # List requests
-mp-cli network --failedOnly             # Failed requests only
-mp-cli network-detail "req_3"           # Request details by ID
-mp-cli network-clear                    # Clear records
+wx-mp-cli assert-text ".title" --text "你好"               # 精确匹配
+wx-mp-cli assert-text ".desc" --textContains "欢迎"        # 包含
+wx-mp-cli assert-text ".code" --textMatches "v\\d+\\.\\d+"   # 正则
+wx-mp-cli assert-attr ".btn" --key class --value active    # 属性断言
+wx-mp-cli assert-state ".modal" --visible                  # 可见性
 ```
 
-### Storage
+### 截图与脚本
 
 ```bash
-mp-cli storage --action list
-mp-cli storage --action get --key userToken
-mp-cli storage --action set --key theme --value '"dark"'
-mp-cli storage --action remove --key tempData
-mp-cli storage --action clear
+wx-mp-cli screenshot --path ./shot.png     # 截图
+wx-mp-cli eval "return wx.getSystemInfoSync()"  # 在页面执行 JS
 ```
 
-### CI / IDE Control
-
-Run locally without daemon — control the DevTools IDE directly:
+### 控制台与网络
 
 ```bash
-mp-cli ci open --project ./my-app       # Open project in IDE
-mp-cli ci login                         # Login (QR in terminal)
-mp-cli ci islogin                       # Check login status
-mp-cli ci upload --version 1.0.0        # Upload code
-mp-cli ci preview --project ./my-app    # Preview (QR)
-mp-cli ci build-npm                     # Build NPM
-mp-cli ci auto --project ./my-app       # Enable automation port
-mp-cli ci close                         # Close project window
-mp-cli ci quit                          # Quit DevTools
+wx-mp-cli console                          # 控制台日志
+wx-mp-cli console --types error            # 按类型过滤
+wx-mp-cli console-detail 5                 # 日志详情
+wx-mp-cli network                          # 网络请求列表
+wx-mp-cli network --failedOnly             # 仅失败请求
+wx-mp-cli network-detail "req_3"           # 请求详情
+wx-mp-cli network-clear                    # 清空记录
 ```
 
-### Diagnostics
+### 存储
 
 ```bash
-mp-cli check-env                        # Check environment
-mp-cli diagnose --project ./my-app      # Diagnose connection issues
+wx-mp-cli storage --action list
+wx-mp-cli storage --action get --key userToken
+wx-mp-cli storage --action set --key theme --value '"dark"'
+wx-mp-cli storage --action remove --key tempData
+wx-mp-cli storage --action clear
 ```
 
-## How It Works
+### CI / IDE 控制
 
-`open` starts a background daemon that holds the miniprogram-automator connection. Each subsequent command connects to the daemon via Unix Socket, executes, and exits. The daemon maintains element mappings, console logs, and network records across commands. Auto-exits after 30 min idle.
-
-## Configuration
+本地执行，无需 daemon——直接控制开发者工具 IDE：
 
 ```bash
-mp-cli config                           # View
-mp-cli config --cliPath <path>          # Set DevTools CLI path
-mp-cli config --defaultProject <path>   # Set default project
+wx-mp-cli ci open --project ./my-app       # 打开项目
+wx-mp-cli ci login                         # 登录（终端显示二维码）
+wx-mp-cli ci islogin                       # 检查登录状态
+wx-mp-cli ci upload --version 1.0.0        # 上传代码
+wx-mp-cli ci preview --project ./my-app    # 预览（生成二维码）
+wx-mp-cli ci build-npm                     # 构建 NPM
+wx-mp-cli ci auto --project ./my-app       # 开启自动化端口
+wx-mp-cli ci close                         # 关闭项目窗口
+wx-mp-cli ci quit                          # 退出开发者工具
 ```
 
-DevTools CLI path is auto-detected on macOS/Windows. Override via `WECHAT_DEVTOOLS_CLI` env var.
+### 诊断
+
+```bash
+wx-mp-cli check-env                        # 环境检查
+wx-mp-cli diagnose --project ./my-app      # 诊断连接问题
+```
+
+## 工作原理
+
+`open` 启动后台 daemon 并建立 miniprogram-automator 连接。后续每条命令通过 Unix Socket 与 daemon 通信，执行后即退出。daemon 在命令间持续维护元素映射、控制台日志和网络记录，空闲 30 分钟后自动退出。
+
+## 配置
+
+```bash
+wx-mp-cli config                           # 查看配置
+wx-mp-cli config --cliPath <path>          # 设置开发者工具 CLI 路径
+wx-mp-cli config --defaultProject <path>   # 设置默认项目
+```
+
+开发者工具路径在 macOS/Windows 上自动检测，也可通过环境变量 `WECHAT_DEVTOOLS_CLI` 覆盖。
 
 ## License
 

@@ -30,7 +30,7 @@ const testFiles = [
 
 console.log('');
 console.log('╔══════════════════════════════════════════╗');
-console.log('║  mp-cli 全量集成测试            ║');
+console.log('║  wx-mp-cli 全量集成测试            ║');
 console.log('╚══════════════════════════════════════════╝');
 console.log('');
 
