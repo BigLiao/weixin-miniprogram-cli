@@ -94,77 +94,39 @@ function isLocalCommand(command: string, positionalArgs?: string[]): boolean {
 
 // ==================== 内置命令 ====================
 
-/**
- * 构建参数简介行（用于命令总览）
- */
-function buildArgsSummary(cmd: CommandDef): string {
-  if (cmd.args.length === 0) return '';
-  const parts: string[] = [];
-  for (const arg of cmd.args) {
-    if (arg.required) {
-      parts.push(`<${arg.name}>*`);
-    } else {
-      parts.push(`--${arg.name}`);
-    }
-    if (arg.alias) {
-      parts.push(`-${arg.alias}`);
-    }
-  }
-  return parts.join('  ');
-}
-
 function showHelp(cmdName?: string): string {
   if (cmdName) {
     const cmd = registry.get(cmdName);
     if (!cmd) {
-      return out.error(`未知命令: ${cmdName}`);
+      return out.error(`未知命令: ${cmdName}\n  输入 help 查看所有命令`);
     }
     return formatCommandHelp(cmd);
   }
 
-  // 显示所有命令
+  // 命令总览：只展示名称 + 简要描述
   const lines: string[] = [
     '',
-    chalk.bold('  wx-mp-cli') + chalk.dim(' — 微信开发者工具交互式 CLI'),
+    chalk.bold('  wx-mp-cli') + chalk.dim(' — 微信小程序 CLI 控制器'),
     '',
   ];
 
   const byCategory = registry.getByCategory();
   for (const [category, cmds] of byCategory) {
-    lines.push(chalk.yellow(`  ${category}:`));
+    lines.push(chalk.yellow(`  ${category}`));
     for (const cmd of cmds) {
-      lines.push(`    ${chalk.cyan(cmd.name.padEnd(28))} ${chalk.dim(cmd.description)}`);
-      const argsSummary = buildArgsSummary(cmd);
-      if (argsSummary) {
-        lines.push(`    ${' '.repeat(28)} ${chalk.dim(argsSummary)}`);
-      }
+      lines.push(`    ${chalk.cyan(cmd.name.padEnd(20))}${chalk.dim(cmd.description)}`);
     }
     lines.push('');
   }
 
-  lines.push(chalk.yellow('  Daemon 管理:'));
-  lines.push(`    ${chalk.cyan('daemon status'.padEnd(28))} ${chalk.dim('查看 daemon 状态')}`);
-  lines.push(`    ${chalk.cyan('daemon stop'.padEnd(28))} ${chalk.dim('停止 daemon 进程')}`);
+  lines.push(chalk.yellow('  其他'));
+  lines.push(`    ${chalk.cyan('daemon status'.padEnd(20))}${chalk.dim('查看 daemon 状态')}`);
+  lines.push(`    ${chalk.cyan('daemon stop'.padEnd(20))}${chalk.dim('停止 daemon')}`);
+  lines.push(`    ${chalk.cyan('help <command>'.padEnd(20))}${chalk.dim('查看命令详情')}`);
+  lines.push(`    ${chalk.cyan('exit'.padEnd(20))}${chalk.dim('退出')}`);
   lines.push('');
 
-  lines.push(chalk.yellow('  内置命令:'));
-  lines.push(`    ${chalk.cyan('help [command]'.padEnd(28))} ${chalk.dim('显示帮助信息')}`);
-  lines.push(`    ${chalk.cyan('exit / quit'.padEnd(28))} ${chalk.dim('退出 CLI')}`);
-  lines.push(`    ${chalk.cyan('clear'.padEnd(28))} ${chalk.dim('清屏')}`);
-  lines.push(`    ${chalk.cyan('history'.padEnd(28))} ${chalk.dim('显示命令历史')}`);
-  lines.push('');
-
-  lines.push(chalk.yellow('  全局选项:'));
-  lines.push(`    ${chalk.cyan('--session <id>'.padEnd(28))} ${chalk.dim('指定目标 session（多连接时使用）')}`);
-  lines.push(`    ${chalk.cyan('--debug'.padEnd(28))} ${chalk.dim('开启调试日志（同 WX_DEBUG=1）')}`);
-  lines.push(`    ${chalk.dim('  环境变量: WX_SESSION=<id>  等效于 --session')}`);
-  lines.push(`    ${chalk.dim('  日志文件: /tmp/wx-mp-cli.log')}`);
-  lines.push('');
-
-  lines.push(chalk.dim('  示例: wx-mp-cli open /path/to/project'));
-  lines.push(chalk.dim('  示例: wx-mp-cli open /path/b --session s2'));
-  lines.push(chalk.dim('  示例: wx-mp-cli snapshot --session s2'));
-  lines.push(chalk.dim('  示例: wx-mp-cli sessions --probe'));
+  lines.push(chalk.dim('  提示: help <command> 查看参数详情，如 help goto'));
   lines.push('');
 
   return lines.join('\n');
