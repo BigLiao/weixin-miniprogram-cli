@@ -278,11 +278,14 @@ function resolveCommand(input: string, options?: { silent?: boolean }): Resolved
     return null;
   }
 
-  // 2. 位置参数自动映射（仅单必填参数命令）
+  // 2. 位置参数自动映射：优先映射到唯一必填参数，否则映射到第一个参数
   if (finalArgs._positional?.length) {
     const requiredArgs = cmd.args.filter(a => a.required);
     if (requiredArgs.length === 1 && finalArgs[requiredArgs[0].name] === undefined) {
       finalArgs[requiredArgs[0].name] = finalArgs._positional[0];
+    } else if (requiredArgs.length === 0 && cmd.args.length > 0 && finalArgs[cmd.args[0].name] === undefined) {
+      // 没有必填参数时，映射到第一个参数（如 goto 的 url）
+      finalArgs[cmd.args[0].name] = finalArgs._positional[0];
     }
   }
 
@@ -614,6 +617,17 @@ if (argv[0] === 'open' && argv.length >= 2) {
 
   (async () => {
     try {
+      // 前置检查：路径校验
+      const absProjectPath = validateProjectPath(projectPath);
+
+      // 前置检查：登录状态（未登录则提示并退出，不自动唤起登录）
+      const { loggedIn, logs: loginLogs } = ensureLogin(ctx);
+      loginLogs.forEach(l => console.log(l));
+      if (!loggedIn) {
+        console.log(out.info('请先执行 wx-mp-cli login 进行登录'));
+        process.exit(1);
+      }
+
       // 启动 daemon
       logger.debug('检查 daemon 状态...');
       const running = await isDaemonRunning();
@@ -629,14 +643,6 @@ if (argv[0] === 'open' && argv.length >= 2) {
       // 提取 --session 参数
       const sessionId = extraArgs.session || process.env.WX_SESSION || undefined;
       delete extraArgs.session;  // session 是 IPC 层面的
-
-      // 前置检查：路径校验 + 登录状态
-      const absProjectPath = validateProjectPath(projectPath);
-      const { loggedIn, logs: loginLogs } = ensureLogin(ctx);
-      loginLogs.forEach(l => console.log(l));
-      if (!loggedIn) {
-        process.exit(1);
-      }
 
       // 发送连接命令（使用绝对路径，避免 daemon 工作目录不同导致相对路径解析错误）
       const connectArgs = { project: absProjectPath, ...extraArgs };

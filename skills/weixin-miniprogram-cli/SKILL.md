@@ -47,7 +47,7 @@ wx-mp-cli close
 
 ```bash
 wx-mp-cli click "button.submit"           # 等同于 --uid "button.submit"
-wx-mp-cli goto "pages/detail/index"       # 等同于 --url "pages/detail/index"
+wx-mp-cli goto "pages/detail/index"        # 等同于 --url "pages/detail/index"
 wx-mp-cli eval "return 1 + 1"             # 等同于 --script "return 1 + 1"
 ```
 
@@ -88,8 +88,8 @@ wx-mp-cli hover "view.card"
 ```bash
 wx-mp-cli goto "pages/detail/index"
 wx-mp-cli goto "pages/detail/index" --params '{"id": "123"}'
+wx-mp-cli goto "pages/home/index"   # tabBar 页面自动使用 switchTab
 wx-mp-cli go-back
-wx-mp-cli switch-tab "pages/home/index"
 wx-mp-cli relaunch "pages/home/index"
 wx-mp-cli scroll 500
 ```

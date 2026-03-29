@@ -23,6 +23,7 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 分钟空闲自动退出
 const COMMAND_TIMEOUT_MS = 120_000;      // 单条命令最长 2 分钟
 const SHUTDOWN_TIMEOUT_MS = 10_000;      // 优雅关闭最长 10 秒
 const MAX_BUFFER_SIZE = 1024 * 1024;     // 客户端 buffer 最大 1MB
+const HEALTH_CHECK_INTERVAL_MS = 15_000; // 每 15 秒检测一次 IDE 连接健康
 
 /** 不需要 resolve session 的命令（session 管理命令通过闭包捕获 sessionMgr） */
 const SESSION_META_COMMANDS = new Set(['sessions', 'switch-session']);
@@ -183,9 +184,10 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
         clearTimeout(timer);
         logger.debug(`done: ${command}${sessionLabel}`, `(${Date.now() - startTime}ms)`);
 
-        // connect 成功后标记 connected
+        // connect 成功后标记 connected，并启动健康检测
         if (command === 'open' && ctx?.miniProgram) {
           ctx.status = 'connected';
+          startHealthCheck();
         }
 
         // disconnect 后标记 disconnected（session 保留在 map 中）
@@ -221,6 +223,46 @@ function isConnectionError(e: any): boolean {
     msg.includes('econnrefused') ||
     msg.includes('socket hang up') ||
     msg.includes('websocket');
+}
+
+// ==================== IDE 连接健康检测 ====================
+
+let healthCheckTimer: NodeJS.Timeout | null = null;
+
+/**
+ * 定期检测 IDE 连接是否存活。
+ * 当所有已连接的 session 都断开（IDE 关闭），自动关闭 daemon。
+ */
+function startHealthCheck(): void {
+  if (healthCheckTimer) return;
+  healthCheckTimer = setInterval(async () => {
+    const sessions = sessionMgr.getAll();
+    // 没有 session 时不处理（等待空闲超时）
+    if (sessions.length === 0) return;
+
+    // 检测每个 connected session 的健康状态
+    for (const session of sessions) {
+      if (session.status !== 'connected' || !session.miniProgram) continue;
+      try {
+        // 尝试获取当前页面作为心跳探测
+        await Promise.race([
+          session.miniProgram.currentPage(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('health check timeout')), 5000)),
+        ]);
+      } catch {
+        logger.warn(`Session ${session.id} IDE 连接已断开，标记为 dead`);
+        session.markDead();
+      }
+    }
+
+    // 如果曾经有过连接，但现在所有 session 都不是 connected 状态，自动退出
+    const hasAnyConnected = sessions.some(s => s.status === 'connected');
+    if (!hasAnyConnected) {
+      logger.info('所有 IDE 连接已断开，自动关闭 daemon');
+      gracefulShutdown();
+    }
+  }, HEALTH_CHECK_INTERVAL_MS);
+  healthCheckTimer.unref(); // 不阻止进程退出
 }
 
 // ==================== Socket 服务 ====================
@@ -338,6 +380,8 @@ async function gracefulShutdown(): Promise<void> {
 
   // 清除空闲计时器
   if (idleTimer) clearTimeout(idleTimer);
+  // 清除健康检测计时器
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
 
   // 断开所有 session 连接
   await sessionMgr.disconnectAll();

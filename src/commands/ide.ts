@@ -6,7 +6,7 @@
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
-import { ensureCliPath, execCli, resolveProject } from '../utils/ide-cli.js';
+import { ensureCliPath, execCli, resolveProject, parseLoginStatus } from '../utils/ide-cli.js';
 
 const CATEGORY = 'IDE 管理';
 
@@ -54,6 +54,8 @@ export const ideLogin: CommandDef = defineCommand({
     const cli = ensureCliPath(ctx);
     const cliArgs = ['login', '--qr-format', args.format || 'terminal'];
     if (args.output) cliArgs.push('--qr-output', args.output);
+    
+    cliArgs.push('--qr-size', 'small');
 
     try {
       const lines: string[] = [out.info('请使用微信扫描二维码：'), ''];
@@ -76,9 +78,9 @@ export const ideIslogin: CommandDef = defineCommand({
   handler: async (_args, ctx) => {
     const cli = ensureCliPath(ctx);
     try {
-      const result = execCli(cli, ['islogin']);
-      // CLI 输出通常是 "login" 或 "not login"
-      if (result.toLowerCase().includes('not')) {
+      const result = execCli(cli, ['islogin']).trim();
+      const loggedIn = parseLoginStatus(result);
+      if (!loggedIn) {
         return out.warn(`未登录 (${result})`);
       }
       return out.success(`已登录 (${result})`);

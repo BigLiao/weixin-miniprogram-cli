@@ -117,14 +117,29 @@ async function initAppInfo(ctx: SharedContext): Promise<string[]> {
     });
 
     // 存到 ctx 供后续命令使用
-    ctx.appPages = config.pages || [];
+    // 统一去除 .html 后缀和开头的 /
+    const normalize = (p: string) => p.replace(/^\//, '').replace(/\.html$/, '');
     ctx.appTabBar = config.tabBar || null;
+    if (ctx.appTabBar?.list) {
+      ctx.appTabBar.list = ctx.appTabBar.list.map((t: any) => ({
+        ...t,
+        pagePath: normalize(t.pagePath || ''),
+      }));
+    }
 
-    // LLM 友好的极简输出
-    lines.push(`[Pages] ${config.pages.join(', ')}`);
+    // appPages 排除 tabBar 页面（tabBar 页面由 goto 内部自动调用 switchTab）
+    const tabPaths = new Set(
+      (ctx.appTabBar?.list || []).map((t: any) => t.pagePath)
+    );
+    ctx.appPages = (config.pages || [])
+      .map((p: string) => normalize(p))
+      .filter((p: string) => !tabPaths.has(p));
 
-    if (config.tabBar?.list?.length) {
-      const tabs = config.tabBar.list.map((t: any) => t.pagePath).join(', ');
+    // LLM 友好的极简输出（使用已 normalize 的数据）
+    lines.push(`[Pages] ${ctx.appPages.join(', ')}`);
+
+    if (ctx.appTabBar?.list?.length) {
+      const tabs = ctx.appTabBar.list.map((t: any) => t.pagePath).join(', ');
       lines.push(`[TabBar] ${tabs}`);
     }
 

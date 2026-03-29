@@ -101,3 +101,18 @@ export function resolveProject(args: Record<string, any>, ctx: SharedContext): s
   const project = args.project || ctx.defaultProject;
   return project ? String(project) : undefined;
 }
+
+/**
+ * 解析 islogin 命令的输出，返回是否已登录
+ * 支持 JSON 格式 {"login":true/false} 和文本格式 "login" / "not login"
+ */
+export function parseLoginStatus(output: string): boolean {
+  const trimmed = output.trim();
+  try {
+    const json = JSON.parse(trimmed);
+    return !!json.login;
+  } catch {
+    const lower = trimmed.toLowerCase();
+    return !lower.includes('not') && lower.includes('login');
+  }
+}

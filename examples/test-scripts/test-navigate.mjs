@@ -1,6 +1,6 @@
 /**
  * 测试: 页面导航
- * goto, go-back, switch-tab, relaunch, scroll
+ * goto, go-back, relaunch, scroll
  */
 
 import { run, assert, describe, summary, cleanup, ctx, DEMO_PROJECT_PATH } from './test-utils.mjs';
@@ -17,7 +17,7 @@ async function main() {
     assert(result.includes('重启'), '应重启成功');
   });
 
-  await describe('goto', async () => {
+  await describe('goto (普通页面)', async () => {
     const result = await run('goto', { url: 'page/component/index' });
     assert(result.includes('导航到') || result.includes('导航失败'), 'goto 应执行');
     // 导航失败也打印出来便于排查
@@ -29,13 +29,13 @@ async function main() {
     assert(result.includes('返回到'), '应返回成功');
   });
 
-  await describe('switch-tab', async () => {
+  await describe('goto (tabBar 页面)', async () => {
     try {
-      const result = await run('switch-tab', { url: 'page/component/index' });
-      assert(result.includes('切换到') || result.includes('失败'), 'switch-tab 应执行');
+      const result = await run('goto', { url: 'page/component/index' });
+      assert(result.includes('导航到') || result.includes('切换到') || result.includes('失败'), 'goto 应执行');
     } catch (e) {
-      // 非 tab 页面会失败，属于预期行为
-      assert(true, `switch-tab: ${e.message}`);
+      // 可能失败，属于预期行为
+      assert(true, `goto tabBar: ${e.message}`);
     }
   });
 

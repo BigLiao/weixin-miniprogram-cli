@@ -1,17 +1,70 @@
 /**
- * 页面导航命令组 (5个)
- * goto, go-back, switch-tab, relaunch, scroll
+ * 页面导航命令组
+ * goto, go-back, relaunch, scroll
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 
-export const navigateTo: CommandDef = defineCommand({
+/**
+ * 标准化页面路径：去掉开头的 / 和结尾的 .html，去掉查询参数
+ */
+function normalizePath(url: string): string {
+  return url.replace(/^\//, '').replace(/\.html$/, '').split('?')[0];
+}
+
+/**
+ * 判断 url 是否为 tabBar 页面
+ */
+function isTabBarPage(url: string, ctx: any): boolean {
+  if (!ctx.appTabBar?.list?.length) return false;
+  const normalized = normalizePath(url);
+  return ctx.appTabBar.list.some(
+    (t: any) => t.pagePath === normalized
+  );
+}
+
+/**
+ * 拼接查询参数到 url
+ */
+function appendParams(url: string, params?: Record<string, any>): string {
+  if (!params || typeof params !== 'object') return url;
+  const query = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join('&');
+  return url + (url.includes('?') ? '&' : '?') + query;
+}
+
+/**
+ * 列出所有可跳转的页面（普通页面 + tabBar 页面）
+ */
+function formatAvailablePages(ctx: any, title: string = '可跳转的页面:'): string {
+  const lines: string[] = [];
+  const tabList = ctx.appTabBar?.list || [];
+  const hasPages = ctx.appPages?.length > 0;
+  const hasTabs = tabList.length > 0;
+
+  if (!hasPages && !hasTabs) {
+    lines.push(out.warn('暂无页面信息，请先 open 项目'));
+    return lines.join('\n');
+  }
+
+  lines.push(out.info(title));
+  for (const p of (ctx.appPages || [])) {
+    lines.push(`  ${p}`);
+  }
+  for (const tab of tabList) {
+    lines.push(`  ${tab.pagePath}${tab.text ? ` (Tab: ${tab.text})` : ' (Tab)'}`);
+  }
+  return lines.join('\n');
+}
+
+export const gotoPage: CommandDef = defineCommand({
   name: 'goto',
-  description: '导航到指定页面',
+  description: '跳转到指定页面（自动识别 tabBar / 普通页面）',
   category: '页面导航',
   args: [
-    { name: 'url', type: 'string', required: true, description: '目标页面路径' },
+    { name: 'url', type: 'string', description: '目标页面路径（不传则列出所有可用页面）' },
     { name: 'params', type: 'json', description: '查询参数 (JSON 对象)' },
     { name: 'redirect', type: 'boolean', default: false, description: '使用 redirect 模式（关闭当前页面）' },
     { name: 'waitForLoad', type: 'boolean', default: true, description: '等待页面加载完成' },
@@ -20,27 +73,29 @@ export const navigateTo: CommandDef = defineCommand({
   handler: async (args, ctx) => {
     ctx.ensureConnected();
 
-    let url = args.url;
-    // 拼接查询参数
-    if (args.params && typeof args.params === 'object') {
-      const query = Object.entries(args.params)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-        .join('&');
-      url += (url.includes('?') ? '&' : '?') + query;
+    if (!args.url) {
+      return formatAvailablePages(ctx);
     }
 
-    // 确保以 / 开头
+    let url = appendParams(args.url, args.params);
     if (!url.startsWith('/')) url = '/' + url;
 
     try {
-      let page: any;
-      if (args.redirect) {
-        page = await ctx.miniProgram!.redirectTo(url);
-      } else {
-        page = await ctx.miniProgram!.navigateTo(url);
+      if (isTabBarPage(url, ctx)) {
+        // tabBar 页面 → switchTab（不支持带参数）
+        const tabUrl = '/' + normalizePath(url);
+        await ctx.miniProgram!.switchTab(tabUrl);
+        ctx.currentPage = await ctx.miniProgram!.currentPage();
+        ctx.elementMap.clear();
+        return out.success(`切换到 Tab: ${ctx.currentPage?.path || tabUrl}`);
       }
+
+      // 普通页面 → navigateTo / redirectTo
+      const page = args.redirect
+        ? await ctx.miniProgram!.redirectTo(url)
+        : await ctx.miniProgram!.navigateTo(url);
       ctx.currentPage = page || await ctx.miniProgram!.currentPage();
-      ctx.elementMap.clear(); // 导航后清空元素映射
+      ctx.elementMap.clear();
 
       return out.success(`导航到: ${ctx.currentPage?.path || url}${args.redirect ? ' (redirect)' : ''}`);
     } catch (e: any) {
@@ -73,39 +128,12 @@ export const navigateBack: CommandDef = defineCommand({
   },
 });
 
-export const switchTab: CommandDef = defineCommand({
-  name: 'switch-tab',
-  description: '切换到指定 Tab 页面',
-  category: '页面导航',
-  args: [
-    { name: 'url', type: 'string', required: true, description: 'Tab 页面路径' },
-    { name: 'waitForLoad', type: 'boolean', default: true, description: '等待页面加载' },
-    { name: 'timeout', type: 'number', default: 5000, description: '等待超时(ms)' },
-  ],
-  handler: async (args, ctx) => {
-    ctx.ensureConnected();
-
-    let url = args.url;
-    if (!url.startsWith('/')) url = '/' + url;
-
-    try {
-      await ctx.miniProgram!.switchTab(url);
-      ctx.currentPage = await ctx.miniProgram!.currentPage();
-      ctx.elementMap.clear();
-
-      return out.success(`切换到 Tab: ${ctx.currentPage?.path || url}`);
-    } catch (e: any) {
-      return out.error(`切换 Tab 失败: ${e.message}`);
-    }
-  },
-});
-
 export const relaunch: CommandDef = defineCommand({
   name: 'relaunch',
   description: '重启小程序并导航到指定页面',
   category: '页面导航',
   args: [
-    { name: 'url', type: 'string', required: true, description: '目标页面路径' },
+    { name: 'url', type: 'string', description: '目标页面路径（不传则列出所有可用页面）' },
     { name: 'params', type: 'json', description: '查询参数 (JSON 对象)' },
     { name: 'waitForLoad', type: 'boolean', default: true, description: '等待页面加载' },
     { name: 'timeout', type: 'number', default: 10000, description: '等待超时(ms)' },
@@ -113,13 +141,11 @@ export const relaunch: CommandDef = defineCommand({
   handler: async (args, ctx) => {
     ctx.ensureConnected();
 
-    let url = args.url;
-    if (args.params && typeof args.params === 'object') {
-      const query = Object.entries(args.params)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-        .join('&');
-      url += (url.includes('?') ? '&' : '?') + query;
+    if (!args.url) {
+      return formatAvailablePages(ctx, '可导航的页面:');
     }
+
+    let url = appendParams(args.url, args.params);
     if (!url.startsWith('/')) url = '/' + url;
 
     try {
@@ -173,9 +199,8 @@ export const scroll: CommandDef = defineCommand({
 });
 
 export const navigateCommands: CommandDef[] = [
-  navigateTo,
+  gotoPage,
   navigateBack,
-  switchTab,
   relaunch,
   scroll,
 ];

@@ -7,7 +7,7 @@
 
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { findCliPath, execCli } from './ide-cli.js';
+import { findCliPath, execCli, parseLoginStatus } from './ide-cli.js';
 import * as out from './output.js';
 import type { SharedContext } from '../context.js';
 
@@ -44,9 +44,9 @@ export interface EnsureLoginResult {
 }
 
 /**
- * 确保微信开发者工具已登录
+ * 检查微信开发者工具是否已登录
  * - 已登录 → 静默通过
- * - 未登录 → 自动唤起扫码登录（inherit 模式显示二维码）
+ * - 未登录 → 返回未登录状态，由调用方决定后续处理
  * - CLI 不可用 → 跳过（不阻断流程）
  */
 export function ensureLogin(ctx: SharedContext): EnsureLoginResult {
@@ -59,31 +59,16 @@ export function ensureLogin(ctx: SharedContext): EnsureLoginResult {
   }
 
   try {
-    const status = execCli(cliPath, ['islogin']);
-    const isLoggedIn = !status.toLowerCase().includes('not');
+    const status = execCli(cliPath, ['islogin']).trim();
+    const isLoggedIn = parseLoginStatus(status);
 
     if (isLoggedIn) {
       logs.push(out.dim('  已登录微信开发者工具'));
       return { loggedIn: true, logs };
     }
 
-    // 未登录 → 唤起扫码
-    logs.push(out.warn('未登录微信开发者工具，正在唤起登录...'));
-    logs.push(out.info('请使用微信扫描二维码：'));
-    execCli(cliPath, ['login', '--qr-format', 'terminal'], {
-      inherit: true,
-      timeout: 180000,
-    });
-
-    // 登录后再次确认
-    const verify = execCli(cliPath, ['islogin']);
-    if (verify.toLowerCase().includes('not')) {
-      logs.push(out.error('登录失败，请重试'));
-      return { loggedIn: false, logs };
-    }
-
-    logs.push(out.success('登录成功'));
-    return { loggedIn: true, logs };
+    logs.push(out.warn('未登录微信开发者工具'));
+    return { loggedIn: false, logs };
   } catch (e: any) {
     logs.push(out.warn(`登录状态检查失败: ${e.message}，继续尝试连接...`));
     return { loggedIn: true, logs }; // 容错：不阻断

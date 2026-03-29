@@ -29,7 +29,7 @@ CLI 集成测试脚本，覆盖全部命令。
 | test-connection.mjs | open/reconnect/close/status | 4 |
 | test-page.mjs | page/query/wait/snapshot | 4 |
 | test-input.mjs | click/fill/value | 3 |
-| test-navigate.mjs | goto/go-back/switch-tab/relaunch | 4 |
+| test-navigate.mjs | goto/go-back/relaunch | 3 |
 | test-assert.mjs | assert-text/assert-attr/assert-state | 3 |
 | test-console.mjs | console/console-detail | 2 |
 | test-network.mjs | network/network-detail/network-clear/network-stop | 4 |

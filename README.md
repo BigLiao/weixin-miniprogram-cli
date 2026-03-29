@@ -88,9 +88,8 @@ wx-mp-cli hover "view.card"                        # 长按
 ### 导航
 
 ```bash
-wx-mp-cli goto "pages/detail/index"        # 跳转页面
+wx-mp-cli goto "pages/detail/index"        # 跳转页面（自动识别 tabBar）
 wx-mp-cli go-back                          # 返回
-wx-mp-cli switch-tab "pages/home/index"    # 切换 Tab
 wx-mp-cli relaunch "pages/home/index"      # 重启到指定页面
 wx-mp-cli scroll 500                       # 滚动到指定位置（px）
 ```
