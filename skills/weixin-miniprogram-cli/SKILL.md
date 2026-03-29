@@ -148,18 +148,18 @@ wx-mp-cli switch-session "s2"
 wx-mp-cli snapshot --session s2
 ```
 
-### CI / IDE 控制
+### IDE 控制
 
 ```bash
-wx-mp-cli ci open --project ./my-app
-wx-mp-cli ci login
-wx-mp-cli ci islogin
-wx-mp-cli ci upload --version 1.0.0
-wx-mp-cli ci preview --project ./my-app
-wx-mp-cli ci build-npm
-wx-mp-cli ci auto --project ./my-app
-wx-mp-cli ci close
-wx-mp-cli ci quit
+wx-mp-cli ide-open --project ./my-app
+wx-mp-cli login
+wx-mp-cli islogin
+wx-mp-cli upload --version 1.0.0
+wx-mp-cli preview --project ./my-app
+wx-mp-cli build-npm
+wx-mp-cli auto --project ./my-app
+wx-mp-cli ide-close
+wx-mp-cli quit
 ```
 
 ### 诊断

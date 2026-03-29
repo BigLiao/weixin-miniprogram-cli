@@ -9,6 +9,8 @@
  * 3. wx-mp-cli --repl              — 传统 REPL 模式（向后兼容）
  */
 
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import * as readline from 'readline';
 import chalk from 'chalk';
 import { SharedContext } from './context.js';
@@ -66,10 +68,10 @@ const LOCAL_COMMANDS = new Set([
   'check-env',
   'config',
   'install-skill',
-  // ci 命令系列
-  'ci open', 'ci login', 'ci islogin', 'ci preview',
-  'ci auto-preview', 'ci upload', 'ci build-npm',
-  'ci auto', 'ci close', 'ci quit', 'ci cache',
+  // IDE 命令系列
+  'ide-open', 'login', 'islogin', 'preview',
+  'auto-preview', 'upload', 'build-npm',
+  'auto', 'ide-close', 'quit', 'cache',
 ]);
 
 /**
@@ -629,8 +631,19 @@ if (argv[0] === 'open' && argv.length >= 2) {
       const sessionId = extraArgs.session || process.env.WX_SESSION || undefined;
       delete extraArgs.session;  // session 是 IPC 层面的
 
-      // 发送连接命令
-      const connectArgs = { project: projectPath, ...extraArgs };
+      // 发送连接命令前校验项目路径
+      const absProjectPath = resolve(projectPath);
+      if (!existsSync(absProjectPath)) {
+        console.log(out.error(`路径不存在: ${absProjectPath}`));
+        process.exit(1);
+      }
+      if (!existsSync(join(absProjectPath, 'project.config.json'))) {
+        console.log(out.error(`该目录不是小程序项目根目录（未找到 project.config.json）: ${absProjectPath}`));
+        process.exit(1);
+      }
+
+      // 发送连接命令（使用绝对路径，避免 daemon 工作目录不同导致相对路径解析错误）
+      const connectArgs = { project: absProjectPath, ...extraArgs };
       const resp = await sendCommand('open', connectArgs, undefined, sessionId);
       if (resp.ok) {
         if (resp.output) console.log(resp.output);

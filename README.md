@@ -139,15 +139,15 @@ wx-mp-cli storage --action clear
 本地执行，无需 daemon——直接控制开发者工具 IDE：
 
 ```bash
-wx-mp-cli ci open --project ./my-app       # 打开项目
-wx-mp-cli ci login                         # 登录（终端显示二维码）
-wx-mp-cli ci islogin                       # 检查登录状态
-wx-mp-cli ci upload --version 1.0.0        # 上传代码
-wx-mp-cli ci preview --project ./my-app    # 预览（生成二维码）
-wx-mp-cli ci build-npm                     # 构建 NPM
-wx-mp-cli ci auto --project ./my-app       # 开启自动化端口
-wx-mp-cli ci close                         # 关闭项目窗口
-wx-mp-cli ci quit                          # 退出开发者工具
+wx-mp-cli ide-open --project ./my-app      # 打开项目
+wx-mp-cli login                            # 登录（终端显示二维码）
+wx-mp-cli islogin                          # 检查登录状态
+wx-mp-cli upload --version 1.0.0           # 上传代码
+wx-mp-cli preview --project ./my-app       # 预览（生成二维码）
+wx-mp-cli build-npm                        # 构建 NPM
+wx-mp-cli auto --project ./my-app          # 开启自动化端口
+wx-mp-cli ide-close                        # 关闭项目窗口
+wx-mp-cli quit                             # 退出开发者工具
 ```
 
 ### 诊断

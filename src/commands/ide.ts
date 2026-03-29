@@ -1,7 +1,7 @@
 /**
  * IDE 管理命令组 (11个)
- * ci open, ci login, ci islogin, ci preview, ci auto-preview,
- * ci upload, ci build-npm, ci auto, ci close, ci quit, ci cache
+ * ide-open, login, islogin, preview, auto-preview,
+ * upload, build-npm, auto, ide-close, quit, cache
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -13,7 +13,7 @@ const CATEGORY = 'IDE 管理';
 // ==================== ide open ====================
 
 export const ideOpen: CommandDef = defineCommand({
-  name: 'ci open',
+  name: 'ide-open',
   description: '打开 IDE / 打开项目',
   category: CATEGORY,
   args: [
@@ -43,7 +43,7 @@ export const ideOpen: CommandDef = defineCommand({
 // ==================== ide login ====================
 
 export const ideLogin: CommandDef = defineCommand({
-  name: 'ci login',
+  name: 'login',
   description: '登录微信开发者工具（终端显示二维码）',
   category: CATEGORY,
   args: [
@@ -69,7 +69,7 @@ export const ideLogin: CommandDef = defineCommand({
 // ==================== ide islogin ====================
 
 export const ideIslogin: CommandDef = defineCommand({
-  name: 'ci islogin',
+  name: 'islogin',
   description: '检查是否已登录',
   category: CATEGORY,
   args: [],
@@ -91,7 +91,7 @@ export const ideIslogin: CommandDef = defineCommand({
 // ==================== ide preview ====================
 
 export const idePreview: CommandDef = defineCommand({
-  name: 'ci preview',
+  name: 'preview',
   description: '预览小程序（生成二维码）',
   category: CATEGORY,
   args: [
@@ -126,7 +126,7 @@ export const idePreview: CommandDef = defineCommand({
 // ==================== ide auto-preview ====================
 
 export const ideAutoPreview: CommandDef = defineCommand({
-  name: 'ci auto-preview',
+  name: 'auto-preview',
   description: '自动预览（输出预览信息到文件）',
   category: CATEGORY,
   args: [
@@ -155,7 +155,7 @@ export const ideAutoPreview: CommandDef = defineCommand({
 // ==================== ide upload ====================
 
 export const ideUpload: CommandDef = defineCommand({
-  name: 'ci upload',
+  name: 'upload',
   description: '上传代码',
   category: CATEGORY,
   args: [
@@ -188,7 +188,7 @@ export const ideUpload: CommandDef = defineCommand({
 // ==================== ide build-npm ====================
 
 export const ideBuildNpm: CommandDef = defineCommand({
-  name: 'ci build-npm',
+  name: 'build-npm',
   description: '构建 NPM',
   category: CATEGORY,
   args: [
@@ -214,7 +214,7 @@ export const ideBuildNpm: CommandDef = defineCommand({
 // ==================== ide auto ====================
 
 export const ideAuto: CommandDef = defineCommand({
-  name: 'ci auto',
+  name: 'auto',
   description: '启用自动化端口',
   category: CATEGORY,
   args: [
@@ -244,7 +244,7 @@ export const ideAuto: CommandDef = defineCommand({
 // ==================== ide close ====================
 
 export const ideClose: CommandDef = defineCommand({
-  name: 'ci close',
+  name: 'ide-close',
   description: '关闭项目窗口',
   category: CATEGORY,
   args: [
@@ -267,7 +267,7 @@ export const ideClose: CommandDef = defineCommand({
 // ==================== ide quit ====================
 
 export const ideQuit: CommandDef = defineCommand({
-  name: 'ci quit',
+  name: 'quit',
   description: '退出微信开发者工具',
   category: CATEGORY,
   args: [],
@@ -285,7 +285,7 @@ export const ideQuit: CommandDef = defineCommand({
 // ==================== ide cache ====================
 
 export const ideCache: CommandDef = defineCommand({
-  name: 'ci cache',
+  name: 'cache',
   description: '清除缓存（storage/file/compile/session/auth）',
   category: CATEGORY,
   args: [

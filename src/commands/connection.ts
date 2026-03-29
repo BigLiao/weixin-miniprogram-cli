@@ -3,12 +3,30 @@
  * open, reconnect, close, status
  */
 
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { defineCommand, type CommandDef } from '../registry.js';
 import { SharedContext } from '../context.js';
 import * as out from '../utils/output.js';
 
 // @ts-ignore - miniprogram-automator 没有类型定义
 import automator from 'miniprogram-automator';
+
+/**
+ * 校验小程序项目路径：检测 app.json 是否存在
+ * @returns 错误信息，如果路径合法则返回 null
+ */
+function validateProjectPath(projectPath: string): string | null {
+  const absPath = resolve(projectPath);
+  if (!existsSync(absPath)) {
+    return `路径不存在: ${absPath}`;
+  }
+  const projectConfig = join(absPath, 'project.config.json');
+  if (!existsSync(projectConfig)) {
+    return `该目录不是小程序项目根目录（未找到 project.config.json）: ${absPath}`;
+  }
+  return null;
+}
 
 /**
  * 启动 Console 和 Network 自动监听
@@ -168,10 +186,17 @@ export const connectDevtools: CommandDef = defineCommand({
         lines.push(out.dim(`连接到 ${args.browserUrl}...`));
         mp = await automator.connect({ wsEndpoint: args.browserUrl } as any);
       } else if (args.project) {
-        const launchOpts: any = { projectPath: args.project };
+        // 将相对路径转为绝对路径
+        const projectPath = resolve(args.project);
+        // 校验小程序项目路径
+        const pathError = validateProjectPath(projectPath);
+        if (pathError) {
+          throw new Error(pathError);
+        }
+        const launchOpts: any = { projectPath };
         if (args.cliPath) launchOpts.cliPath = args.cliPath;
         if (args.autoPort) launchOpts.port = args.autoPort;
-        lines.push(out.dim(`启动项目: ${args.project}...`));
+        lines.push(out.dim(`启动项目: ${projectPath}...`));
         mp = await automator.launch(launchOpts);
       } else {
         throw new Error('请指定 --project 或 --ws 或 --browserUrl');
