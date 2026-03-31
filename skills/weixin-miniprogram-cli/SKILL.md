@@ -17,11 +17,11 @@ npm install -g weixin-miniprogram-cli
 ```bash
 # 连接小程序
 wx-mp-cli open /path/to/miniprogram
-# 获取页面快照，发现可操作元素
+# 获取页面 WXML 源码和数据
 wx-mp-cli snapshot
-# 用快照中的 UID 操作元素
-wx-mp-cli click "button.submit"
-wx-mp-cli fill "input.username" --text "test"
+# 用 CSS 选择器操作元素
+wx-mp-cli click ".btn"
+wx-mp-cli fill ".username" --text "test"
 # 验证结果
 wx-mp-cli assert-text ".title" --text "成功"
 # 截图
@@ -32,23 +32,38 @@ wx-mp-cli close
 
 ## 核心概念
 
-`snapshot` 返回页面元素树，每个元素有唯一 UID。后续命令通过 UID 定位元素：
+`snapshot` 返回当前页面的 WXML 源码和页面数据 (`page.data()`)。通过阅读 WXML 源码了解页面结构，然后使用 CSS 选择器直接定位元素进行交互：
 
 ```
-✅ Snapshot: 24 elements
-  #login-btn → #login-btn[0]
-  view.card → view.card[0]
-  input.username → input.username[0]
+✅ 页面快照获取成功
+  页面: pages/index/index
+
+=== WXML 源码 ===
+<view class="container">
+  <text class="title">{{title}}</text>
+  <button class="btn" bindtap="onTap">提交</button>
+</view>
+
+=== 页面数据 (data) ===
+{
+  "title": "Hello World"
+}
 ```
 
-页面跳转后 UID 会重置，需重新执行 `snapshot`。
+所有交互命令使用 **CSS 选择器** 定位元素：
+
+```bash
+wx-mp-cli click ".btn"                    # class 选择器
+wx-mp-cli click "#login-btn"              # id 选择器
+wx-mp-cli fill "input.username" --text "test"  # 标签+class 组合
+```
 
 唯一必填参数支持**位置传参**，无需写 flag：
 
 ```bash
-wx-mp-cli click "button.submit"           # 等同于 --uid "button.submit"
-wx-mp-cli goto "pages/detail/index"        # 等同于 --url "pages/detail/index"
-wx-mp-cli eval "return 1 + 1"             # 等同于 --script "return 1 + 1"
+wx-mp-cli click ".btn"                   # 等同于 --selector ".btn"
+wx-mp-cli goto "pages/detail/index"       # 等同于 --url "pages/detail/index"
+wx-mp-cli eval "return 1 + 1"            # 等同于 --script "return 1 + 1"
 ```
 
 ## 命令
@@ -65,8 +80,11 @@ wx-mp-cli status
 ### 快照与查询
 
 ```bash
-wx-mp-cli snapshot
-wx-mp-cli snapshot --format compact
+wx-mp-cli snapshot                              # WXML 源码 + 精简版 data
+wx-mp-cli snapshot --filePath ./snapshot.txt     # 保存到文件
+wx-mp-cli page-data                             # 完整 page.data()
+wx-mp-cli page-data --key cardInfo              # 只看指定 key
+wx-mp-cli page-data --filePath ./data.json      # 保存到文件
 wx-mp-cli page
 wx-mp-cli query ".search-input"
 wx-mp-cli wait --selector ".modal" --timeout 5000
@@ -75,12 +93,12 @@ wx-mp-cli wait --selector ".modal" --timeout 5000
 ### 交互
 
 ```bash
-wx-mp-cli click "button.submit"
-wx-mp-cli click "item.row" --dblClick
-wx-mp-cli fill "input.username" --text "hello"
-wx-mp-cli fill "input.search" --text "query" --clear
-wx-mp-cli value "input.username"
-wx-mp-cli hover "view.card"
+wx-mp-cli click ".btn"
+wx-mp-cli click ".item" --dblClick
+wx-mp-cli fill ".username" --text "hello"
+wx-mp-cli fill ".search" --text "query" --clear
+wx-mp-cli value ".username"
+wx-mp-cli hover ".card"
 ```
 
 ### 导航
@@ -176,9 +194,9 @@ wx-mp-cli debug-connect --project ./my-app
 ```bash
 wx-mp-cli open /path/to/miniprogram
 wx-mp-cli snapshot
-wx-mp-cli fill "input.username" --text "testuser"
-wx-mp-cli fill "input.password" --text "password123"
-wx-mp-cli click "button.login"
+wx-mp-cli fill ".username" --text "testuser"
+wx-mp-cli fill ".password" --text "password123"
+wx-mp-cli click ".login-btn"
 wx-mp-cli wait --selector ".home-page" --timeout 10000
 wx-mp-cli snapshot
 wx-mp-cli assert-text ".welcome" --textContains "testuser"
@@ -192,7 +210,7 @@ wx-mp-cli close
 wx-mp-cli open /path/to/miniprogram
 wx-mp-cli goto "pages/list/index"
 wx-mp-cli snapshot
-wx-mp-cli click "view.item[0]"
+wx-mp-cli click ".item"
 wx-mp-cli wait --selector ".detail-page"
 wx-mp-cli snapshot
 wx-mp-cli assert-text ".detail-title" --text "预期标题"

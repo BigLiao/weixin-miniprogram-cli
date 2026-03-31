@@ -86,7 +86,6 @@ export const gotoPage: CommandDef = defineCommand({
         const tabUrl = '/' + normalizePath(url);
         await ctx.miniProgram!.switchTab(tabUrl);
         ctx.currentPage = await ctx.miniProgram!.currentPage();
-        ctx.elementMap.clear();
         return out.success(`切换到 Tab: ${ctx.currentPage?.path || tabUrl}`);
       }
 
@@ -95,7 +94,6 @@ export const gotoPage: CommandDef = defineCommand({
         ? await ctx.miniProgram!.redirectTo(url)
         : await ctx.miniProgram!.navigateTo(url);
       ctx.currentPage = page || await ctx.miniProgram!.currentPage();
-      ctx.elementMap.clear();
 
       return out.success(`导航到: ${ctx.currentPage?.path || url}${args.redirect ? ' (redirect)' : ''}`);
     } catch (e: any) {
@@ -119,7 +117,6 @@ export const navigateBack: CommandDef = defineCommand({
     try {
       await ctx.miniProgram!.navigateBack({ delta: args.delta || 1 });
       ctx.currentPage = await ctx.miniProgram!.currentPage();
-      ctx.elementMap.clear();
 
       return out.success(`返回到: ${ctx.currentPage?.path || 'unknown'}`);
     } catch (e: any) {
@@ -151,7 +148,6 @@ export const relaunch: CommandDef = defineCommand({
     try {
       await ctx.miniProgram!.reLaunch(url);
       ctx.currentPage = await ctx.miniProgram!.currentPage();
-      ctx.elementMap.clear();
       ctx.consoleMessages = [];
       ctx.networkRequests = [];
 

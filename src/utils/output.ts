@@ -67,3 +67,36 @@ export function truncate(str: string, maxLen: number = 80): string {
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 3) + '...';
 }
+
+/**
+ * 精简 JSON 对象，限制字符串长度和数组长度
+ * 用于 snapshot 等场景，避免输出过长
+ */
+export function summarizeJson(
+  obj: any,
+  options: { maxStringLen?: number; maxArrayLen?: number } = {},
+): any {
+  const { maxStringLen = 80, maxArrayLen = 3 } = options;
+
+  function walk(val: any): any {
+    if (val === null || val === undefined) return val;
+    if (typeof val === 'string') {
+      return truncate(val, maxStringLen);
+    }
+    if (typeof val !== 'object') return val;
+    if (Array.isArray(val)) {
+      const sliced = val.slice(0, maxArrayLen).map(walk);
+      if (val.length > maxArrayLen) {
+        sliced.push(`... 共 ${val.length} 项`);
+      }
+      return sliced;
+    }
+    const result: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      result[k] = walk(v);
+    }
+    return result;
+  }
+
+  return walk(obj);
+}
