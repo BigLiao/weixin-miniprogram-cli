@@ -33,15 +33,17 @@ export const getPageSnapshot: CommandDef = defineCommand({
       // ========== 读取 WXML 源码文件 ==========
       const projectDir = ctx.defaultProject || ctx.lastConnectionParams?.project;
       let wxmlLoaded = false;
+      let wxmlPath = '';
 
       if (projectDir) {
-        // 尝试拼接路径读取 .wxml 文件
-        const wxmlPath = path.join(projectDir, pagePath + '.wxml');
+        // 尝试拼接路径读取 .wxml 文件（去掉 pagePath 的前导 /）
+        const cleanPath = pagePath.replace(/^\//, '');
+        wxmlPath = path.join(projectDir, cleanPath + '.wxml');
         try {
           if (fs.existsSync(wxmlPath)) {
             const wxmlContent = fs.readFileSync(wxmlPath, 'utf-8');
             lines.push('=== WXML 源码 ===');
-            lines.push(wxmlContent);
+            lines.push(wxmlContent.trimEnd());
             wxmlLoaded = true;
           }
         } catch {
@@ -50,17 +52,20 @@ export const getPageSnapshot: CommandDef = defineCommand({
       }
 
       if (!wxmlLoaded) {
-        lines.push(out.warn('无法读取 WXML 源文件（项目路径未知或文件不存在），仅显示页面数据'));
+        if (projectDir) {
+          lines.push(out.warn(`无法读取 WXML 源文件: ${wxmlPath}（文件不存在），仅显示页面数据`));
+        } else {
+          lines.push(out.warn('无法读取 WXML 源文件（项目路径未知），仅显示页面数据'));
+        }
         lines.push('');
       }
 
       // ========== 获取页面数据（精简版） ==========
       try {
         const data = await page.data();
-        const summarized = out.summarizeJson(data);
         lines.push('');
         lines.push('=== 页面数据 (data, 精简) ===');
-        lines.push(JSON.stringify(summarized, null, 2));
+        lines.push(out.summarizeJson(data));
         lines.push(out.dim('  完整数据请使用 page-data 命令'));
       } catch (e: any) {
         lines.push('');

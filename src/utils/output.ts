@@ -3,6 +3,7 @@
  */
 
 import chalk from 'chalk';
+import { inspect } from 'node:util';
 
 export function success(msg: string): string {
   return chalk.green('✅ ') + msg;
@@ -69,34 +70,21 @@ export function truncate(str: string, maxLen: number = 80): string {
 }
 
 /**
- * 精简 JSON 对象，限制字符串长度和数组长度
- * 用于 snapshot 等场景，避免输出过长
+ * 精简格式化 JSON 对象，限制字符串长度、数组长度和嵌套深度
+ * 基于 Node.js 内置 util.inspect，用于 snapshot 等场景避免输出过长
  */
 export function summarizeJson(
   obj: any,
-  options: { maxStringLen?: number; maxArrayLen?: number } = {},
-): any {
-  const { maxStringLen = 80, maxArrayLen = 3 } = options;
-
-  function walk(val: any): any {
-    if (val === null || val === undefined) return val;
-    if (typeof val === 'string') {
-      return truncate(val, maxStringLen);
-    }
-    if (typeof val !== 'object') return val;
-    if (Array.isArray(val)) {
-      const sliced = val.slice(0, maxArrayLen).map(walk);
-      if (val.length > maxArrayLen) {
-        sliced.push(`... 共 ${val.length} 项`);
-      }
-      return sliced;
-    }
-    const result: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val)) {
-      result[k] = walk(v);
-    }
-    return result;
-  }
-
-  return walk(obj);
+  options: { maxStringLength?: number; maxArrayLength?: number; depth?: number } = {},
+): string {
+  const { maxStringLength = 80, maxArrayLength = 3, depth = 4 } = options;
+  return inspect(obj, {
+    depth,
+    maxArrayLength,
+    maxStringLength,
+    compact: false,
+    breakLength: 100,
+    sorted: false,
+    colors: false,
+  });
 }
