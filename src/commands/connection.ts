@@ -295,7 +295,6 @@ export const getConnectionStatus: CommandDef = defineCommand({
           ctx.currentPage = await ctx.miniProgram!.currentPage();
         }
         lines.push(`  当前页面: ${ctx.currentPage?.path || 'unknown'}`);
-        lines.push(`  元素映射: ${ctx.elementMap.size} 个`);
         lines.push(`  Console 监听: ${ctx.consoleListening ? '开启' : '关闭'} (${ctx.consoleMessages.length} 条消息)`);
         lines.push(`  Network 监听: ${ctx.networkListening ? '开启' : '关闭'} (${ctx.networkRequests.length} 条请求)`);
       } catch (e: any) {

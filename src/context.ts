@@ -3,11 +3,6 @@
  * 对应 MCP 项目的 ToolContext / MiniProgramContext
  */
 
-export interface ElementMapInfo {
-  selector: string;
-  index: number;
-}
-
 export interface ConsoleMessage {
   msgid: number;
   type: string;
@@ -35,7 +30,6 @@ export interface NetworkRequest {
 export class SharedContext {
   miniProgram: any | null = null;
   currentPage: any | null = null;
-  elementMap: Map<string, ElementMapInfo> = new Map();
   consoleMessages: ConsoleMessage[] = [];
   networkRequests: NetworkRequest[] = [];
   consoleListening: boolean = false;
@@ -67,18 +61,14 @@ export class SharedContext {
     }
   }
 
-  /** 通过 UID 获取元素 */
-  async getElementByUid(uid: string): Promise<any> {
+  /** 通过 CSS 选择器获取元素 */
+  async getElementBySelector(selector: string): Promise<any> {
     this.ensurePage();
-    const info = this.elementMap.get(uid);
-    if (!info) {
-      throw new Error(`未找到 UID "${uid}"。请先执行 get_page_snapshot 获取页面快照`);
+    const el = await this.currentPage!.$(selector);
+    if (!el) {
+      throw new Error(`未找到元素: "${selector}"。请检查选择器是否正确`);
     }
-    const elements = await this.currentPage!.$$(info.selector);
-    if (!elements || elements.length <= info.index) {
-      throw new Error(`元素 "${uid}" 已不存在于页面中。请重新执行 get_page_snapshot`);
-    }
-    return elements[info.index];
+    return el;
   }
 
   /** 生成下一个 console 消息 ID */
@@ -121,7 +111,6 @@ export class SharedContext {
   reset(): void {
     this.miniProgram = null;
     this.currentPage = null;
-    this.elementMap.clear();
     this.consoleMessages = [];
     this.networkRequests = [];
     this.consoleListening = false;
@@ -175,7 +164,6 @@ export class Session extends SharedContext {
     id: string;
     status: SessionStatus;
     currentPage: string | null;
-    elementMapSize: number;
     idleMs: number;
     createdAt: number;
   } {
@@ -183,7 +171,6 @@ export class Session extends SharedContext {
       id: this.id,
       status: this.status,
       currentPage: this.currentPage?.path || null,
-      elementMapSize: this.elementMap.size,
       idleMs: Date.now() - this.lastActiveAt,
       createdAt: this.createdAt,
     };

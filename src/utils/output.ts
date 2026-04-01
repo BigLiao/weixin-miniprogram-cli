@@ -3,6 +3,7 @@
  */
 
 import chalk from 'chalk';
+import { inspect } from 'node:util';
 
 export function success(msg: string): string {
   return chalk.green('✅ ') + msg;
@@ -66,4 +67,24 @@ export function prettyJson(obj: any): string {
 export function truncate(str: string, maxLen: number = 80): string {
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 3) + '...';
+}
+
+/**
+ * 精简格式化 JSON 对象，限制字符串长度、数组长度和嵌套深度
+ * 基于 Node.js 内置 util.inspect，用于 snapshot 等场景避免输出过长
+ */
+export function summarizeJson(
+  obj: any,
+  options: { maxStringLength?: number; maxArrayLength?: number; depth?: number } = {},
+): string {
+  const { maxStringLength = 80, maxArrayLength = 3, depth = 4 } = options;
+  return inspect(obj, {
+    depth,
+    maxArrayLength,
+    maxStringLength,
+    compact: false,
+    breakLength: 100,
+    sorted: false,
+    colors: false,
+  });
 }

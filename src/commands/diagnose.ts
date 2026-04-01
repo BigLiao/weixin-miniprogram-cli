@@ -198,7 +198,6 @@ export const debugPageElements: CommandDef = defineCommand({
     // 页面路径
     lines.push('');
     lines.push(`  当前页面: ${ctx.currentPage!.path}`);
-    lines.push(`  已映射元素: ${ctx.elementMap.size}`);
 
     return lines.join('\n');
   },
