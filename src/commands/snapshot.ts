@@ -1,48 +1,21 @@
 /**
- * 页面快照命令 (1个)
- * snapshot
+ * 页面快照命令 (2个)
+ * snapshot, page-data
  *
- * 支持两种模式:
- * - tree（默认）: 通过 outerWxml() 获取 DOM 树结构，解析为层级格式
- * - flat (compact/minimal/json): 通过 page.$$('*') 逐个获取元素属性，扁平列表
+ * snapshot: 读取 WXML 源码文件 + 精简版 page.data()
+ * page-data: 输出完整的 page.data()
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
-import { type ElementMapInfo } from '../context.js';
-import { parseWxml, type WxmlNode } from '../utils/wxml-parser.js';
-import { buildElementMap, formatSnapshotTree } from '../utils/uid.js';
 import * as out from '../utils/output.js';
-
-interface ElementSnapshot {
-  uid: string;
-  tagName: string;
-  text?: string;
-  className?: string;
-  id?: string;
-  urls?: Record<string, string>;
-  position?: { left: number; top: number; width: number; height: number };
-}
-
-/** 媒体元素标签 → 对应的 URL 属性名 */
-const MEDIA_URL_ATTRS: Record<string, string[]> = {
-  'image': ['src'],
-  'img': ['src'],
-  'video': ['src', 'poster'],
-  'audio': ['src'],
-  'cover-image': ['src'],
-  'live-player': ['src'],
-  'live-pusher': ['url'],
-};
+import * as fs from 'fs';
+import * as path from 'path';
 
 export const getPageSnapshot: CommandDef = defineCommand({
   name: 'snapshot',
-  description: '获取当前页面元素快照（生成 UID 供其他命令引用）',
+  description: '获取当前页面 WXML 源码和页面数据（精简版）',
   category: '页面快照',
   args: [
-    { name: 'format', type: 'string', default: 'tree', description: '输出格式: tree|compact|minimal|json' },
-    { name: 'maxElements', type: 'number', description: '限制返回元素数量' },
-    { name: 'maxDepth', type: 'number', description: '树形格式最大深度（仅 tree 格式）' },
-    { name: 'includePosition', type: 'boolean', default: false, description: '包含位置信息（仅 flat 格式）' },
     { name: 'filePath', type: 'string', description: '保存快照到文件' },
   ],
   handler: async (args, ctx) => {
@@ -50,36 +23,57 @@ export const getPageSnapshot: CommandDef = defineCommand({
 
     const lines: string[] = [];
     const page = ctx.currentPage!;
-    const format = args.format || 'tree';
 
     try {
-      // 清空之前的元素映射
-      ctx.elementMap.clear();
+      const pagePath = page.path as string;
+      lines.push(out.success('页面快照获取成功'));
+      lines.push(`  页面: ${pagePath}`);
+      lines.push('');
 
-      // 等待页面稳定
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // ========== 读取 WXML 源码文件 ==========
+      const projectDir = ctx.defaultProject || ctx.lastConnectionParams?.project;
+      let wxmlLoaded = false;
+      let wxmlPath = '';
 
-      if (format === 'tree') {
-        // ========== 树形模式：通过 outerWxml 获取 DOM 树 ==========
-        const treeResult = await getTreeSnapshot(page, ctx, args);
-        if (treeResult) {
-          lines.push(...treeResult);
-        } else {
-          // fallback 到 flat 模式
-          lines.push(out.warn('树形模式失败，回退到 compact 模式'));
-          lines.push('');
-          const flatResult = await getFlatSnapshot(page, ctx, { ...args, format: 'compact' });
-          lines.push(...flatResult);
+      if (projectDir) {
+        // 尝试拼接路径读取 .wxml 文件（去掉 pagePath 的前导 /）
+        const cleanPath = pagePath.replace(/^\//, '');
+        wxmlPath = path.join(projectDir, cleanPath + '.wxml');
+        try {
+          if (fs.existsSync(wxmlPath)) {
+            const wxmlContent = fs.readFileSync(wxmlPath, 'utf-8');
+            lines.push('=== WXML 源码 ===');
+            lines.push(wxmlContent.trimEnd());
+            wxmlLoaded = true;
+          }
+        } catch {
+          // 读取失败，走降级逻辑
         }
-      } else {
-        // ========== 扁平模式：原有逻辑 ==========
-        const flatResult = await getFlatSnapshot(page, ctx, args);
-        lines.push(...flatResult);
+      }
+
+      if (!wxmlLoaded) {
+        if (projectDir) {
+          lines.push(out.warn(`无法读取 WXML 源文件: ${wxmlPath}（文件不存在），仅显示页面数据`));
+        } else {
+          lines.push(out.warn('无法读取 WXML 源文件（项目路径未知），仅显示页面数据'));
+        }
+        lines.push('');
+      }
+
+      // ========== 获取页面数据（精简版） ==========
+      try {
+        const data = await page.data();
+        lines.push('');
+        lines.push('=== 页面数据 (data, 精简) ===');
+        lines.push(out.summarizeJson(data));
+        lines.push(out.dim('  完整数据请使用 page-data 命令'));
+      } catch (e: any) {
+        lines.push('');
+        lines.push(out.warn(`获取页面数据失败: ${e.message}`));
       }
 
       // 保存到文件
       if (args.filePath) {
-        const fs = await import('fs');
         fs.writeFileSync(args.filePath, lines.join('\n'), 'utf-8');
         lines.push('');
         lines.push(out.success(`快照已保存到: ${args.filePath}`));
@@ -92,300 +86,52 @@ export const getPageSnapshot: CommandDef = defineCommand({
   },
 });
 
-/**
- * 树形快照：通过 outerWxml() 获取完整 WXML 并解析为树
- */
-async function getTreeSnapshot(
-  page: any,
-  ctx: any,
-  args: Record<string, any>,
-): Promise<string[] | null> {
-  try {
-    // 获取 page 根元素的 WXML
-    const pageEl = await page.$('page');
-    if (!pageEl) return null;
-
-    const wxmlStr = await pageEl.outerWxml();
-    if (!wxmlStr) return null;
-
-    // 解析 WXML 为树
-    const tree = parseWxml(wxmlStr);
-    if (tree.length === 0) return null;
-
-    // 生成 elementMap（DFS 顺序，与 $$() 查询一致）
-    const elementMap = buildElementMap(tree);
-
-    // ========== 回填文本：对缺失 text 的节点通过 SDK 补充 ==========
-    await backfillText(page, tree, elementMap);
-
-    // 注册到 ctx
-    for (const [uid, info] of elementMap) {
-      ctx.elementMap.set(uid, info);
-    }
+export const getPageData: CommandDef = defineCommand({
+  name: 'page-data',
+  description: '获取当前页面完整数据 (page.data())',
+  category: '页面快照',
+  args: [
+    { name: 'key', type: 'string', description: '只获取指定 key 的数据' },
+    { name: 'filePath', type: 'string', description: '保存数据到文件' },
+  ],
+  handler: async (args, ctx) => {
+    ctx.ensurePage();
 
     const lines: string[] = [];
-    lines.push(out.success(`快照获取成功，共 ${elementMap.size} 个元素 (树形)`));
-    lines.push(`  页面: ${page.path}`);
-    lines.push('');
+    const page = ctx.currentPage!;
 
-    // 格式化输出
-    const maxElements = args.maxElements || 500;
-    const maxDepth = args.maxDepth || Infinity;
-    const treeOutput = formatSnapshotTree(tree, { maxDepth, maxElements });
-    lines.push(treeOutput);
-
-    return lines;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 回填树中缺失文本的 <text> 节点
- * 按 selector 分组批量查询，调用 .text() 获取真实文本
- */
-async function backfillText(
-  page: any,
-  tree: WxmlNode[],
-  elementMap: Map<string, ElementMapInfo>,
-): Promise<void> {
-  // 收集需要回填文本的 <text> 节点（有 uid 且 text 为空）
-  const needText: { node: WxmlNode; selector: string; index: number }[] = [];
-
-  function collectEmpty(node: WxmlNode): void {
-    const uid = (node as any)._uid as string | undefined;
-    if (uid && !node.text && node.tagName === 'text') {
-      const info = elementMap.get(uid);
-      if (info) {
-        needText.push({ node, selector: info.selector, index: info.index });
-      }
-    }
-    for (const child of node.children) {
-      collectEmpty(child);
-    }
-  }
-  for (const n of tree) collectEmpty(n);
-
-  if (needText.length === 0) return;
-
-  // 按 selector 分组，避免重复查询同一选择器
-  const bySelector = new Map<string, { node: WxmlNode; index: number }[]>();
-  for (const item of needText) {
-    let group = bySelector.get(item.selector);
-    if (!group) {
-      group = [];
-      bySelector.set(item.selector, group);
-    }
-    group.push({ node: item.node, index: item.index });
-  }
-
-  // 批量查询并回填（限制并发，避免太多同时请求）
-  const entries = Array.from(bySelector.entries());
-  const BATCH = 5;
-  for (let i = 0; i < entries.length; i += BATCH) {
-    const batch = entries.slice(i, i + BATCH);
-    await Promise.all(batch.map(async ([selector, items]) => {
-      try {
-        const elements = await page.$$(selector);
-        for (const { node, index } of items) {
-          if (index < elements.length) {
-            try {
-              const text = await elements[index].text();
-              if (text && text.trim()) {
-                node.text = text.trim();
-              }
-            } catch {
-              // 单个元素获取文本失败，跳过
-            }
-          }
-        }
-      } catch {
-        // 选择器查询失败，跳过整组
-      }
-    }));
-  }
-}
-
-/**
- * 扁平快照：原有 $$('*') + 逐个属性获取逻辑
- */
-async function getFlatSnapshot(
-  page: any,
-  ctx: any,
-  args: Record<string, any>,
-): Promise<string[]> {
-  const lines: string[] = [];
-
-  // ========== 获取元素 ==========
-  let childElements: any[] = [];
-
-  // 策略1: 通配符
-  try {
-    childElements = await page.$$('*');
-  } catch {}
-
-  // 策略2: 降级到常用选择器
-  if (childElements.length === 0) {
-    const selectors = [
-      'view', 'text', 'button', 'image', 'input', 'textarea', 'picker',
-      'switch', 'slider', 'scroll-view', 'swiper', 'icon', 'rich-text',
-      'navigator', 'form', 'checkbox', 'radio', 'cover-view',
-    ];
-    for (const sel of selectors) {
-      try {
-        const els = await page.$$(sel);
-        childElements.push(...els);
-      } catch {}
-    }
-  }
-
-  // 策略3: page > *
-  if (childElements.length === 0) {
     try {
-      childElements = await page.$$('page > *');
-    } catch {}
-  }
+      const data = await page.data();
+      let output: any;
 
-  if (childElements.length === 0) {
-    lines.push(out.warn('未获取到任何页面元素'));
-    lines.push(out.dim('  页面可能尚未加载完成，请稍后重试'));
-    return lines;
-  }
-
-  // 限制数量
-  const maxElements = args.maxElements || 200;
-  if (childElements.length > maxElements) {
-    childElements = childElements.slice(0, maxElements);
-  }
-
-  // ========== 批量获取元素属性 ==========
-  const elements: ElementSnapshot[] = [];
-  const selectorIndexMap = new Map<string, number>();
-
-  for (let i = 0; i < childElements.length; i++) {
-    const element = childElements[i];
-    try {
-      // 并行获取属性
-      const [tagNameResult, textResult, classResult, idResult, sizeResult, offsetResult] =
-        await Promise.allSettled([
-          Promise.resolve(element.tagName || 'unknown'),
-          element.text().catch(() => ''),
-          element.attribute('class').catch(() => ''),
-          element.attribute('id').catch(() => ''),
-          element.size().catch(() => null),
-          element.offset().catch(() => null),
-        ]);
-
-      const tagName = tagNameResult.status === 'fulfilled' ? tagNameResult.value : 'unknown';
-      const text = textResult.status === 'fulfilled' ? textResult.value : '';
-      const className = classResult.status === 'fulfilled' ? classResult.value : '';
-      const id = idResult.status === 'fulfilled' ? idResult.value : '';
-      const size = sizeResult.status === 'fulfilled' ? sizeResult.value : null;
-      const offset = offsetResult.status === 'fulfilled' ? offsetResult.value : null;
-
-      // 生成选择器 / UID
-      let baseSelector = tagName;
-      if (id) {
-        baseSelector = `${tagName}#${id}`;
-      } else if (className) {
-        const firstClass = String(className).trim().split(/\s+/)[0];
-        if (firstClass) baseSelector = `${tagName}.${firstClass}`;
-      }
-
-      // 处理重复选择器：加索引
-      const count = selectorIndexMap.get(baseSelector) || 0;
-      selectorIndexMap.set(baseSelector, count + 1);
-
-      // 同一选择器超过 8 个时省略
-      if (count >= 8) continue;
-
-      const uid = count > 0 ? `${baseSelector}:${count}` : baseSelector;
-
-      // 注册到 elementMap
-      ctx.elementMap.set(uid, { selector: baseSelector, index: count });
-
-      // 构建快照
-      const snap: ElementSnapshot = { uid, tagName };
-      if (text && text.trim()) snap.text = text.trim().slice(0, 100);
-      if (className) snap.className = String(className).trim();
-      if (id) snap.id = id;
-
-      // 媒体元素获取 URL 属性
-      const mediaAttrs = MEDIA_URL_ATTRS[tagName];
-      if (mediaAttrs) {
-        const urls: Record<string, string> = {};
-        for (const attr of mediaAttrs) {
-          try {
-            const val = await element.attribute(attr).catch(() => '');
-            if (val) urls[attr] = val;
-          } catch {}
+      if (args.key) {
+        output = data?.[args.key];
+        if (output === undefined) {
+          return out.warn(`data 中不存在 key: "${args.key}"\n  可用 key: ${Object.keys(data || {}).join(', ')}`);
         }
-        if (Object.keys(urls).length > 0) snap.urls = urls;
+        lines.push(out.success(`data.${args.key}:`));
+      } else {
+        output = data;
+        lines.push(out.success(`页面数据 (${page.path}):`));
       }
 
-      if (size && offset) {
-        snap.position = {
-          left: Math.round(offset.left),
-          top: Math.round(offset.top),
-          width: Math.round(size.width),
-          height: Math.round(size.height),
-        };
-      }
+      const jsonStr = JSON.stringify(output, null, 2);
+      lines.push(jsonStr);
 
-      elements.push(snap);
-    } catch {
-      // 跳过获取失败的元素
+      if (args.filePath) {
+        fs.writeFileSync(args.filePath, jsonStr, 'utf-8');
+        lines.push('');
+        lines.push(out.success(`数据已保存到: ${args.filePath}`));
+      }
+    } catch (e: any) {
+      lines.push(out.error(`获取页面数据失败: ${e.message}`));
     }
-  }
 
-  // ========== 格式化输出 ==========
-  lines.push(out.success(`快照获取成功，共 ${elements.length} 个元素`));
-  lines.push(`  页面: ${page.path}`);
-  lines.push('');
-
-  const format = args.format || 'compact';
-
-  if (format === 'json') {
-    lines.push(out.prettyJson({ path: page.path, elements }));
-  } else if (format === 'minimal') {
-    for (const el of elements) {
-      const textPart = el.text ? ` "${truncate(el.text, 40)}"` : '';
-      const urlPart = formatUrls(el.urls);
-      lines.push(`  ${out.highlight(el.uid)} ${el.tagName}${textPart}${urlPart}`);
-    }
-  } else {
-    // compact（默认）
-    for (const el of elements) {
-      const parts = [`uid=${out.highlight(el.uid)}`, el.tagName];
-      if (el.text) parts.push(`"${truncate(el.text, 40)}"`);
-      if (el.urls) {
-        for (const [attr, val] of Object.entries(el.urls)) {
-          parts.push(`${attr}=${val}`);
-        }
-      }
-      if (args.includePosition && el.position) {
-        parts.push(`pos=[${el.position.left},${el.position.top}]`);
-        parts.push(`size=[${el.position.width}x${el.position.height}]`);
-      }
-      lines.push(`  ${parts.join(' ')}`);
-    }
-  }
-
-  return lines;
-}
-
-function formatUrls(urls?: Record<string, string>): string {
-  if (!urls) return '';
-  const parts = Object.entries(urls).map(([attr, val]) => `${attr}=${val}`);
-  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
-}
-
-function truncate(text: string, max: number): string {
-  const clean = text.replace(/\n/g, ' ').trim();
-  if (clean.length <= max) return clean;
-  return clean.slice(0, max - 3) + '...';
-}
+    return lines.join('\n');
+  },
+});
 
 export const snapshotCommands: CommandDef[] = [
   getPageSnapshot,
+  getPageData,
 ];
