@@ -13,7 +13,7 @@ export interface ConsoleMessage {
 
 export interface NetworkRequest {
   reqid: string;
-  type: 'request' | 'uploadFile' | 'downloadFile';
+  type: 'request';
   method: string;
   url: string;
   statusCode?: number;
@@ -26,6 +26,9 @@ export interface NetworkRequest {
   success: boolean;
   errMsg?: string;
 }
+
+/** 网络日志缓冲区最大条数（小程序端 & daemon 端共用） */
+export const NETWORK_BUFFER_SIZE = 200;
 
 export class SharedContext {
   miniProgram: any | null = null;
@@ -92,10 +95,13 @@ export class SharedContext {
     });
   }
 
-  /** 添加网络请求 */
+  /** 添加网络请求（环形缓冲区，超过上限丢弃最旧的） */
   addNetworkRequest(req: Omit<NetworkRequest, 'reqid'>): string {
     const reqid = this.nextNetworkReqId();
     this.networkRequests.push({ ...req, reqid });
+    if (this.networkRequests.length > NETWORK_BUFFER_SIZE) {
+      this.networkRequests.splice(0, this.networkRequests.length - NETWORK_BUFFER_SIZE);
+    }
     return reqid;
   }
 

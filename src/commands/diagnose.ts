@@ -88,8 +88,6 @@ export const doctorCommand: CommandDef = defineCommand({
 
     if (isDevToolsRunning()) {
       pass('开发者工具进程运行中');
-    } else {
-      warn('开发者工具未启动');
     }
 
     if (cliPath) {
@@ -105,26 +103,6 @@ export const doctorCommand: CommandDef = defineCommand({
       }
     }
 
-    // 服务端口
-    try {
-      if (process.platform === 'darwin') {
-        const result = execSync('lsof -i :9420 2>/dev/null || true', { encoding: 'utf-8' });
-        if (result.trim()) {
-          pass('服务端口 9420 已监听');
-        } else {
-          warn('服务端口 9420 未监听（请在开发者工具 设置→安全→服务端口 中开启）');
-        }
-      } else if (process.platform === 'win32') {
-        const result = execSync('netstat -ano | findstr :9420 2>nul || echo ""', { encoding: 'utf-8' });
-        if (result.trim()) {
-          pass('服务端口 9420 已监听');
-        } else {
-          warn('服务端口 9420 未监听（请在开发者工具 设置→安全→服务端口 中开启）');
-        }
-      }
-    } catch {
-      lines.push(out.dim('  端口检查跳过'));
-    }
     lines.push('');
 
     // ---- 3. Daemon 状态 ----
