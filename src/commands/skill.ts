@@ -44,7 +44,7 @@ export const installSkill: CommandDef = defineCommand({
   ],
   handler: async (args, _ctx) => {
     const pkgRoot = path.resolve(__dirname, '..', '..');
-    const srcDir = path.join(pkgRoot, 'skills', 'wx-mp-cli');
+    const srcDir = path.join(pkgRoot, 'skills', 'weixin-miniprogram-cli');
 
     if (!fs.existsSync(srcDir)) {
       return out.error(`skill 源目录不存在: ${srcDir}`);
