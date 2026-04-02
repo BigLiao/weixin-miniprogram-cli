@@ -34,7 +34,7 @@ CLI 集成测试脚本，覆盖全部命令。
 | test-console.mjs | console/console-detail | 2 |
 | test-network.mjs | network/network-detail/network-clear/network-stop | 4 |
 | test-screenshot-script.mjs | screenshot/eval | 2 |
-| test-diagnose.mjs | diagnose/check-env/debug-elements/debug-connect | 4 |
+| test-diagnose.mjs | doctor | 1 |
 
 ### 运行测试
 

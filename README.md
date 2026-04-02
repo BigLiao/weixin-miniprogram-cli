@@ -6,6 +6,10 @@
 
 专为 AI Coding Agent 设计的微信小程序自动化 CLI。配合 Skill 使用，打通开发、测试、部署的全流程。
 
+## For AI Agents
+
+请安装对应Skill来使用，目录为：`skills/weixin-miniprogram-cli`。
+
 ## 安装
 
 推荐通过 npm 全局安装：
@@ -24,6 +28,17 @@ npm install && npm run build && npm link
 
 **前置条件：** Node.js >= 16，已安装[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)并开启 **设置 → 安全设置 → 服务端口**。
 
+### 安装 Skill
+
+通过自带命令可以自动安装 Skill。
+
+```bash
+wx-mp-cli install-skill              # 安装到当前项目 .claude/skills/
+wx-mp-cli install-skill --universal  # 安装到 .agent/skills/（跨 agent 通用）
+wx-mp-cli install-skill --global     # 安装到 ~/.claude/skills/（用户全局）
+```
+
+或者手动下载 `./skills/weixin-miniprogram-cli` 到skills目录下。
 
 ## 基本使用
 
@@ -39,17 +54,7 @@ wx-mp-cli close
 ```
 
 
-## 安装 Skill
 
-搭配专用 Skill 使用，实现 AI 完全自动化开发小程序。
-
-通过自带命令可以自动安装 Skill。
-
-```bash
-wx-mp-cli install-skill              # 安装到当前项目 .claude/skills/
-wx-mp-cli install-skill --universal  # 安装到 .agent/skills/（跨 agent 通用）
-wx-mp-cli install-skill --global     # 安装到 ~/.claude/skills/（用户全局）
-```
 
 
 ## 命令一览
@@ -152,8 +157,7 @@ wx-mp-cli quit                             # 退出开发者工具
 ### 诊断
 
 ```bash
-wx-mp-cli check-env                        # 环境检查
-wx-mp-cli diagnose --project ./my-app      # 诊断连接问题
+wx-mp-cli doctor                           # 环境与连接一键诊断
 ```
 
 ## 工作原理

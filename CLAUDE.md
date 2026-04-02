@@ -30,6 +30,11 @@ npm run clean      # 清理 build/
 - `examples/` — 示例和测试脚本
 - `skills/` — Claude Code skill 定义
 
+## 开发
+
+- 每次变更命令后，执行`help`命令来查看帮助信息，确保命令帮助信息正确。
+- 变更命令后，检查一下 SKILL.md 和 README.md 是否需要更新。
+
 ## 发布流程
 
 ### 前置准备（仅需一次）

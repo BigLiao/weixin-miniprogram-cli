@@ -10,6 +10,9 @@
  */
 
 import * as readline from 'readline';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import chalk from 'chalk';
 import { SharedContext } from './context.js';
 import { registry, type CommandDef } from './registry.js';
@@ -26,6 +29,20 @@ import {
   stopDaemon,
   getDaemonPid,
 } from './client.js';
+
+// ==================== 版本号 ====================
+
+function getVersion(): string {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const pkgPath = resolve(__dirname, '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
 
 // ==================== Debug 模式初始化 ====================
 
@@ -64,7 +81,7 @@ loadPersistedConfig(ctx);
  * 不需要 daemon 的命令（可以本地直接执行）
  */
 const LOCAL_COMMANDS = new Set([
-  'check-env',
+  'doctor',
   'config',
   'install-skill',
   // IDE 命令系列
@@ -76,7 +93,7 @@ const LOCAL_COMMANDS = new Set([
 /**
  * 内置命令（不走注册表）
  */
-const BUILTIN_COMMANDS = new Set(['help', 'exit', 'quit', 'clear', 'history']);
+const BUILTIN_COMMANDS = new Set(['help', 'exit', 'quit', 'clear', 'history', 'version']);
 
 /**
  * 判断命令是否可以本地执行
@@ -94,7 +111,11 @@ function isLocalCommand(command: string, positionalArgs?: string[]): boolean {
 
 // ==================== 内置命令 ====================
 
-function showHelp(cmdName?: string): string {
+function showVersion(): string {
+  return `wx-mp-cli v${getVersion()}`;
+}
+
+function showHelp(cmdName?: string, detail?: boolean): string {
   if (cmdName) {
     const cmd = registry.get(cmdName);
     if (!cmd) {
@@ -103,30 +124,57 @@ function showHelp(cmdName?: string): string {
     return formatCommandHelp(cmd);
   }
 
-  // 命令总览：只展示名称 + 简要描述
+  const version = getVersion();
   const lines: string[] = [
     '',
-    chalk.bold('  wx-mp-cli') + chalk.dim(' — 微信小程序 CLI 控制器'),
+    chalk.bold(`  wx-mp-cli v${version}`) + chalk.dim(' — 微信小程序 CLI 控制器'),
     '',
   ];
 
   const byCategory = registry.getByCategory();
-  for (const [category, cmds] of byCategory) {
-    lines.push(chalk.yellow(`  ${category}`));
-    for (const cmd of cmds) {
-      lines.push(`    ${chalk.cyan(cmd.name.padEnd(20))}${chalk.dim(cmd.description)}`);
+
+  if (detail) {
+    // 详细模式：展示每个命令的所有参数
+    for (const [category, cmds] of byCategory) {
+      lines.push(chalk.yellow(`  ${category}`));
+      lines.push('');
+      for (const cmd of cmds) {
+        lines.push(`    ${chalk.cyan.bold(cmd.name)}  ${chalk.dim(cmd.description)}`);
+        if (cmd.args.length > 0) {
+          for (const arg of cmd.args) {
+            const required = arg.required ? chalk.red('*') : ' ';
+            const alias = arg.alias ? chalk.dim(` (-${arg.alias})`) : '';
+            const defaultVal = arg.default !== undefined ? chalk.dim(` [默认: ${arg.default}]`) : '';
+            const typeStr = chalk.dim(`<${arg.type}>`);
+            lines.push(`      ${required} --${chalk.cyan(arg.name.padEnd(18))}${alias} ${typeStr} ${arg.description}${defaultVal}`);
+          }
+        }
+        lines.push('');
+      }
     }
-    lines.push('');
+  } else {
+    // 简洁模式：只展示名称 + 简要描述
+    for (const [category, cmds] of byCategory) {
+      lines.push(chalk.yellow(`  ${category}`));
+      for (const cmd of cmds) {
+        lines.push(`    ${chalk.cyan(cmd.name.padEnd(20))}${chalk.dim(cmd.description)}`);
+      }
+      lines.push('');
+    }
   }
 
   lines.push(chalk.yellow('  其他'));
   lines.push(`    ${chalk.cyan('daemon status'.padEnd(20))}${chalk.dim('查看 daemon 状态')}`);
   lines.push(`    ${chalk.cyan('daemon stop'.padEnd(20))}${chalk.dim('停止 daemon')}`);
+  lines.push(`    ${chalk.cyan('version'.padEnd(20))}${chalk.dim('查看版本号')}`);
   lines.push(`    ${chalk.cyan('help <command>'.padEnd(20))}${chalk.dim('查看命令详情')}`);
+  lines.push(`    ${chalk.cyan('help --detail'.padEnd(20))}${chalk.dim('查看所有命令的完整参数')}`);
   lines.push(`    ${chalk.cyan('exit'.padEnd(20))}${chalk.dim('退出')}`);
   lines.push('');
 
-  lines.push(chalk.dim('  提示: help <command> 查看参数详情，如 help goto'));
+  if (!detail) {
+    lines.push(chalk.dim('  提示: help --detail 查看完整参数，help <command> 查看单个命令详情'));
+  }
   lines.push('');
 
   return lines.join('\n');
@@ -334,8 +382,15 @@ async function executeReplCommand(input: string): Promise<void> {
   // 内置命令
   switch (command) {
     case 'help': {
+      const detail = args.detail === true;
+      // 过滤掉 --detail，剩余位置参数作为目标命令
       const helpTarget = args._positional?.join(' ');
-      console.log(showHelp(helpTarget));
+      console.log(showHelp(helpTarget, detail));
+      return;
+    }
+
+    case 'version': {
+      console.log(showVersion());
       return;
     }
 
@@ -409,7 +464,7 @@ async function autoDisconnect(): Promise<void> {
 
 function showBanner(): void {
   console.log('');
-  console.log(chalk.bold('  🔧 wx-mp-cli v0.1.0'));
+  console.log(chalk.bold(`  🔧 wx-mp-cli v${getVersion()}`));
   console.log(chalk.dim('  微信开发者工具交互式 CLI 控制器'));
   console.log(chalk.dim(`  ${allCommands.length} 个命令可用，输入 help 查看帮助`));
   console.log('');
@@ -432,7 +487,7 @@ function startPrompt(): void {
       const trimmed = line.trim();
       const allNames = [
         ...registry.getAll().map(c => c.name),
-        'help', 'exit', 'quit', 'clear', 'history',
+        'help', 'exit', 'quit', 'clear', 'history', 'version',
         'daemon status', 'daemon stop',
       ];
 
@@ -689,8 +744,14 @@ if (argv[0] === 'open' && argv.length >= 2) {
 
   // 内置命令
   if (command === 'help') {
+    const detail = args.detail === true;
     const helpTarget = args._positional?.join(' ');
-    console.log(showHelp(helpTarget));
+    console.log(showHelp(helpTarget, detail));
+    process.exit(0);
+  }
+
+  if (command === 'version' || command === '--version' || command === '-v') {
+    console.log(showVersion());
     process.exit(0);
   }
 
