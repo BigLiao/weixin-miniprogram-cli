@@ -4,34 +4,28 @@
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
+import { NETWORK_BUFFER_SIZE } from '../context.js';
 import * as out from '../utils/output.js';
 
 /**
- * 从小程序端同步网络日志（通过 miniProgram.evaluate）
+ * 从小程序端同步网络日志（拉取 wx.__networkLogs）
  */
 async function syncNetworkLogs(ctx: any): Promise<void> {
   if (!ctx.miniProgram) return;
 
   try {
-    const remoteLogs = await ctx.miniProgram.evaluate(function() {
-      // @ts-ignore
-      const logs = typeof wx !== 'undefined' && wx.__networkLogs ? wx.__networkLogs : [];
-      // 序列化后返回（避免循环引用）
-      try {
-        return JSON.parse(JSON.stringify(logs));
-      } catch {
-        return [];
-      }
-    });
+    const remoteLogs = await ctx.miniProgram.evaluate(`function() {
+      return wx.__networkLogs || [];
+    }`);
 
     if (Array.isArray(remoteLogs)) {
-      // 合并新日志
-      const existingUrls = new Set(ctx.networkRequests.map((r: any) => `${r.url}_${r.timestamp}`));
+      // 合并新日志（按 url + timestamp 去重）
+      const existingKeys = new Set(ctx.networkRequests.map((r: any) => `${r.url}_${r.timestamp}`));
       for (const log of remoteLogs) {
         const key = `${log.url}_${log.timestamp}`;
-        if (!existingUrls.has(key)) {
+        if (!existingKeys.has(key)) {
           ctx.addNetworkRequest({
-            type: log.type || 'request',
+            type: 'request',
             method: log.method || 'GET',
             url: log.url,
             statusCode: log.statusCode,
@@ -62,7 +56,7 @@ export const listNetworkRequests: CommandDef = defineCommand({
     { name: 'urlPattern', type: 'string', description: 'URL 匹配模式（支持正则）' },
     { name: 'successOnly', type: 'boolean', default: false, description: '只显示成功请求' },
     { name: 'failedOnly', type: 'boolean', default: false, description: '只显示失败请求' },
-    { name: 'resourceTypes', type: 'string', description: '资源类型过滤（逗号分隔: request,uploadFile,downloadFile）' },
+    { name: 'resourceTypes', type: 'string', description: '资源类型过滤（逗号分隔，如: request）' },
   ],
   handler: async (args, ctx) => {
     // 先从远端同步
@@ -194,15 +188,10 @@ export const stopNetworkMonitoring: CommandDef = defineCommand({
       return out.warn('网络监控未运行');
     }
 
+    // 使用 restoreWxMethod 恢复原始 wx.request
     try {
       if (ctx.miniProgram) {
-        await ctx.miniProgram.evaluate(function() {
-          // @ts-ignore
-          if (typeof wx !== 'undefined') {
-            // @ts-ignore
-            wx.__networkIntercepted = false;
-          }
-        });
+        await ctx.miniProgram.restoreWxMethod('request');
       }
     } catch {}
 

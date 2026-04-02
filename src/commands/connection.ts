@@ -4,7 +4,7 @@
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
-import { SharedContext } from '../context.js';
+import { SharedContext, NETWORK_BUFFER_SIZE } from '../context.js';
 import * as out from '../utils/output.js';
 import { validateProjectPath } from '../utils/preflight.js';
 
@@ -33,63 +33,67 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
     logs.push(`Console 监听启动失败: ${e.message}`);
   }
 
-  // 自动启动 Network 监听（通过 miniProgram.evaluate 注入拦截器）
+  // 自动启动 Network 监听（通过 mockWxMethod 拦截 wx.request）
   try {
     if (ctx.miniProgram && !ctx.networkListening) {
-      await ctx.miniProgram.evaluate(function() {
-        // @ts-ignore
-        if (typeof wx === 'undefined' || wx.__networkIntercepted) return;
-        // @ts-ignore
-        wx.__networkIntercepted = true;
-        // @ts-ignore
+      // 先在小程序端初始化日志数组和缓冲区大小
+      const bufferSize = NETWORK_BUFFER_SIZE;
+      await ctx.miniProgram.evaluate(`function() {
         wx.__networkLogs = wx.__networkLogs || [];
+        wx.__networkBufferSize = ${bufferSize};
+      }`);
+
+      // 使用 mockWxMethod 拦截 wx.request
+      await ctx.miniProgram.mockWxMethod('request', function(options: any) {
+        const start = Date.now();
+        const entry: any = {
+          type: 'request',
+          method: options.method || 'GET',
+          url: options.url,
+          requestData: options.data,
+          requestHeader: options.header,
+          timestamp: start,
+          success: false,
+          statusCode: 0,
+          responseData: null,
+          responseHeader: null,
+          errMsg: '',
+          duration: 0,
+        };
 
         // @ts-ignore
-        const origRequest = wx.request;
+        const logs = wx.__networkLogs;
+        logs.push(entry);
+        // 环形缓冲区：超出上限时丢弃最旧的
         // @ts-ignore
-        delete wx.request;
-        // @ts-ignore
-        Object.defineProperty(wx, 'request', {
-          configurable: true,
-          value: function(options: any) {
-            const start = Date.now();
-            const entry = {
-              type: 'request',
-              method: options.method || 'GET',
-              url: options.url,
-              requestData: options.data,
-              requestHeader: options.header,
-              timestamp: Date.now(),
-              success: false,
-              statusCode: 0,
-              responseData: null,
-              responseHeader: null,
-              errMsg: '',
-              duration: 0
-            };
-            // @ts-ignore
-            wx.__networkLogs.push(entry);
+        const maxSize = wx.__networkBufferSize || 200;
+        if (logs.length > maxSize) {
+          logs.splice(0, logs.length - maxSize);
+        }
 
-            const origSuccess = options.success;
-            const origFail = options.fail;
-            options.success = function(res: any) {
-              entry.statusCode = res.statusCode;
-              entry.responseData = res.data;
-              entry.responseHeader = res.header;
-              entry.success = true;
-              entry.duration = Date.now() - start;
-              if (origSuccess) origSuccess.call(this, res);
-            };
-            options.fail = function(err: any) {
-              entry.success = false;
-              entry.errMsg = err.errMsg || String(err);
-              entry.duration = Date.now() - start;
-              if (origFail) origFail.call(this, err);
-            };
-            return origRequest.call(this, options);
-          }
-        });
+        const origSuccess = options.success;
+        const origFail = options.fail;
+
+        options.success = function(res: any) {
+          entry.statusCode = res.statusCode;
+          entry.responseData = res.data;
+          entry.responseHeader = res.header;
+          entry.success = true;
+          entry.duration = Date.now() - start;
+          if (origSuccess) origSuccess.call(this, res);
+        };
+        options.fail = function(err: any) {
+          entry.success = false;
+          entry.errMsg = err.errMsg || String(err);
+          entry.duration = Date.now() - start;
+          if (origFail) origFail.call(this, err);
+        };
+
+        // 调用原始 wx.request
+        // @ts-ignore
+        return this.origin(options);
       });
+
       ctx.networkListening = true;
       logs.push('Network 监听已自动启动');
     }
