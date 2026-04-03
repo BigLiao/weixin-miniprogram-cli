@@ -16,8 +16,12 @@ export interface ArgDef {
 export interface CommandDef {
   name: string;
   description: string;
+  /** 详细说明，显示在 help <command> 中 */
+  longDescription?: string;
   category: string;
   args: ArgDef[];
+  /** 自定义示例列表，每项为 { cmd, desc }；未提供时自动生成 */
+  examples?: { cmd: string; desc?: string }[];
   handler: (args: Record<string, any>, ctx: SharedContext) => Promise<string>;
 }
 
