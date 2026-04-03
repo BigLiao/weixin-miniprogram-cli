@@ -758,7 +758,8 @@ if (argv[0] === 'open' && argv.length >= 2) {
 } else {
   // ======= wx-mp-cli <command> [args] =======
   // 判断是本地命令还是需要 daemon
-  const input = argv.join(' ');
+  // 对含空格的参数重新加引号，避免 tokenize 拆分
+  const input = argv.map(a => a.includes(' ') ? `"${a}"` : a).join(' ');
   const { command, args } = parseCommand(input);
 
   if (!command) {
