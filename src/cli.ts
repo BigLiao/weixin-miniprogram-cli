@@ -10,6 +10,7 @@
  */
 
 import * as readline from 'readline';
+import path from 'node:path';
 import chalk from 'chalk';
 import { SharedContext } from './context.js';
 import { registry, type CommandDef } from './registry.js';
@@ -293,6 +294,11 @@ async function executeDaemonCommand(input: string): Promise<void> {
     return;
   }
   if (!resolved) return;
+
+  // daemon CWD 与用户终端不同，需在 client 端将 file 参数转为绝对路径
+  if (resolved.args.file && typeof resolved.args.file === 'string') {
+    resolved.args.file = path.resolve(resolved.args.file);
+  }
 
   const sessionId = resolved.sessionId || process.env.WX_SESSION || undefined;
 
