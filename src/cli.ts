@@ -10,6 +10,7 @@
  */
 
 import * as readline from 'readline';
+import path from 'node:path';
 import chalk from 'chalk';
 import { SharedContext } from './context.js';
 import { registry, type CommandDef } from './registry.js';
@@ -163,10 +164,27 @@ function formatCommandHelp(cmd: CommandDef): string {
 
   lines.push('');
 
+  // 详细说明
+  if (cmd.longDescription) {
+    for (const line of cmd.longDescription.split('\n')) {
+      lines.push(`  ${chalk.dim(line)}`);
+    }
+    lines.push('');
+  }
+
   // 使用示例
   lines.push(chalk.yellow('  示例:'));
-  const example = buildExample(cmd);
-  lines.push(`    ${chalk.dim('$')} ${example}`);
+  if (cmd.examples && cmd.examples.length > 0) {
+    for (const ex of cmd.examples) {
+      lines.push(`    ${chalk.dim('$')} ${ex.cmd}`);
+      if (ex.desc) {
+        lines.push(`      ${chalk.dim(ex.desc)}`);
+      }
+    }
+  } else {
+    const example = buildExample(cmd);
+    lines.push(`    ${chalk.dim('$')} ${example}`);
+  }
   lines.push('');
 
   return lines.join('\n');
@@ -276,6 +294,11 @@ async function executeDaemonCommand(input: string): Promise<void> {
     return;
   }
   if (!resolved) return;
+
+  // daemon CWD 与用户终端不同，需在 client 端将 file 参数转为绝对路径
+  if (resolved.args.file && typeof resolved.args.file === 'string') {
+    resolved.args.file = path.resolve(resolved.args.file);
+  }
 
   const sessionId = resolved.sessionId || process.env.WX_SESSION || undefined;
 
