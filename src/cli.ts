@@ -163,10 +163,27 @@ function formatCommandHelp(cmd: CommandDef): string {
 
   lines.push('');
 
+  // 详细说明
+  if (cmd.longDescription) {
+    for (const line of cmd.longDescription.split('\n')) {
+      lines.push(`  ${chalk.dim(line)}`);
+    }
+    lines.push('');
+  }
+
   // 使用示例
   lines.push(chalk.yellow('  示例:'));
-  const example = buildExample(cmd);
-  lines.push(`    ${chalk.dim('$')} ${example}`);
+  if (cmd.examples && cmd.examples.length > 0) {
+    for (const ex of cmd.examples) {
+      lines.push(`    ${chalk.dim('$')} ${ex.cmd}`);
+      if (ex.desc) {
+        lines.push(`      ${chalk.dim(ex.desc)}`);
+      }
+    }
+  } else {
+    const example = buildExample(cmd);
+    lines.push(`    ${chalk.dim('$')} ${example}`);
+  }
   lines.push('');
 
   return lines.join('\n');
