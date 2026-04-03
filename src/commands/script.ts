@@ -16,10 +16,10 @@ export const evaluateScript: CommandDef = defineCommand({
     { name: 'script', type: 'string', description: '要执行的 JavaScript 文件路径', alias: 's' },
   ],
   examples: [
-    'eval "return 1 + 1"',
-    'eval "return wx.getSystemInfoSync()"',
-    'eval --code "return getCurrentPages().map(p => p.route)"',
-    'eval --script ./test.js',
+    { cmd: 'eval "return 1 + 1"' },
+    { cmd: 'eval "return wx.getSystemInfoSync()"' },
+    { cmd: 'eval --code "return getCurrentPages().map(p => p.route)"' },
+    { cmd: 'eval --script ./test.js' },
   ],
   handler: async (args, ctx) => {
     ctx.ensureConnected();
