@@ -28,6 +28,17 @@ const HEALTH_CHECK_INTERVAL_MS = 15_000; // 每 15 秒检测一次 IDE 连接健
 /** 不需要 resolve session 的命令（session 管理命令通过闭包捕获 sessionMgr） */
 const SESSION_META_COMMANDS = new Set(['sessions', 'switch-session']);
 
+/** 命令执行后自动检查并附加 exception 输出的命令 */
+const EXCEPTION_AWARE_COMMANDS = new Set([
+  'open', 'goto', 'go-back', 'relaunch', 'scroll', 'snapshot',
+]);
+
+/** 需要等待异步 exception 到达的命令（页面导航类） */
+const EXCEPTION_WAIT_COMMANDS = new Set([
+  'open', 'goto', 'go-back', 'relaunch',
+]);
+const EXCEPTION_WAIT_MS = 500;
+
 // ==================== 初始化 ====================
 
 // daemon 始终开启日志（通过 WX_DEBUG 环境变量控制，或默认 info 级别）
@@ -179,6 +190,11 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
         logger.debug(`exec: ${command}${sessionLabel}`, finalArgs);
 
         const coerced = coerceArgs(finalArgs, cmd.args);
+
+        // 记录执行前的 console 消息数量，用于检测新增 exception
+        const preExecMsgCount = (ctx && EXCEPTION_AWARE_COMMANDS.has(command))
+          ? ctx.consoleMessages.length : 0;
+
         const result = await cmd.handler(coerced, ctx as any);
 
         clearTimeout(timer);
@@ -195,7 +211,28 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
           ctx.status = 'disconnected';
         }
 
-        resolve({ ok: true, output: result || '' });
+        // 检查命令执行期间新增的 exception，附加到输出中
+        let finalOutput = result || '';
+        if (ctx && EXCEPTION_AWARE_COMMANDS.has(command)) {
+          // 导航类命令等待异步 exception 事件到达
+          if (EXCEPTION_WAIT_COMMANDS.has(command)) {
+            await new Promise(r => setTimeout(r, EXCEPTION_WAIT_MS));
+          }
+          const newExceptions = ctx.consoleMessages
+            .slice(preExecMsgCount)
+            .filter(m => m.type === 'exception');
+          if (newExceptions.length > 0) {
+            const exLines = newExceptions.map(ex => {
+              const msg = ex.args.map((a: any) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+              let line = `\n⚠ [Exception] ${msg}`;
+              if (ex.stack) line += `\n  堆栈: ${ex.stack}`;
+              return line;
+            });
+            finalOutput += '\n' + exLines.join('\n');
+          }
+        }
+
+        resolve({ ok: true, output: finalOutput });
       } catch (e: any) {
         clearTimeout(timer);
         logger.error(`fail: ${command}`, `(${Date.now() - startTime}ms)`, e.message);
