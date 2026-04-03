@@ -7,6 +7,7 @@
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 import { ensureCliPath, execCli, resolveProject, parseLoginStatus } from '../utils/ide-cli.js';
+import { ensureCiKey } from '../utils/preflight.js';
 
 const CATEGORY = 'IDE 管理';
 
@@ -58,8 +59,9 @@ export const ideLogin: CommandDef = defineCommand({
     cliArgs.push('--qr-size', 'small');
 
     try {
-      const lines: string[] = [out.info('请使用微信扫描二维码：'), ''];
-      execCli(cli, cliArgs, { inherit: true, timeout: 180000 });
+      const timeOutMs = 180000;
+      const lines: string[] = [out.info(`请使用微信扫描二维码（等待超时时间：${timeOutMs}ms）：`), '（必须用户手动操作）'];
+      execCli(cli, cliArgs, { inherit: true, timeout: timeOutMs });
       lines.push(out.success('登录完成'));
       return lines.join('\n');
     } catch (e: any) {
@@ -102,6 +104,7 @@ export const idePreview: CommandDef = defineCommand({
     { name: 'output', type: 'string', description: '二维码保存路径', alias: 'o' },
     { name: 'infoOutput', type: 'string', description: '预览信息输出路径', alias: 'i' },
     { name: 'compileCond', type: 'json', description: '自定义编译条件 (JSON)' },
+    { name: 'keyPath', type: 'string', description: 'CI 代码上传密钥路径' },
   ],
   handler: async (args, ctx) => {
     const cli = ensureCliPath(ctx);
@@ -114,13 +117,20 @@ export const idePreview: CommandDef = defineCommand({
     if (args.infoOutput) cliArgs.push('--info-output', args.infoOutput);
     if (args.compileCond) cliArgs.push('--compile-condition', JSON.stringify(args.compileCond));
 
+    // CI 密钥检查
+    const ciKey = ensureCiKey(project, args.keyPath);
+    const keyLogs = ciKey.logs;
+    if (ciKey.keyPath) {
+      cliArgs.push('--upload-private-key', ciKey.keyPath);
+    }
+
     try {
-      const lines: string[] = [out.info('正在编译预览...')];
+      const lines: string[] = [...keyLogs, out.info('正在编译预览...')];
       execCli(cli, cliArgs, { inherit: true, timeout: 180000 });
       lines.push(out.success('预览完成'));
       return lines.join('\n');
     } catch (e: any) {
-      return out.error(`预览失败: ${e.message}`);
+      return [...keyLogs, out.error(`预览失败: ${e.message}`)].join('\n');
     }
   },
 });
@@ -134,6 +144,7 @@ export const ideAutoPreview: CommandDef = defineCommand({
   args: [
     { name: 'project', type: 'string', description: '项目路径', alias: 'p' },
     { name: 'infoOutput', type: 'string', description: '预览信息输出路径', alias: 'i' },
+    { name: 'keyPath', type: 'string', description: 'CI 代码上传密钥路径' },
   ],
   handler: async (args, ctx) => {
     const cli = ensureCliPath(ctx);
@@ -143,13 +154,20 @@ export const ideAutoPreview: CommandDef = defineCommand({
     const cliArgs = ['auto-preview', '--project', project];
     if (args.infoOutput) cliArgs.push('--info-output', args.infoOutput);
 
+    // CI 密钥检查
+    const ciKey = ensureCiKey(project, args.keyPath);
+    const keyLogs = ciKey.logs;
+    if (ciKey.keyPath) {
+      cliArgs.push('--upload-private-key', ciKey.keyPath);
+    }
+
     try {
       const result = execCli(cli, cliArgs, { timeout: 180000 });
-      const lines = [out.success('自动预览完成')];
+      const lines = [...keyLogs, out.success('自动预览完成')];
       if (result) lines.push(out.dim(result));
       return lines.join('\n');
     } catch (e: any) {
-      return out.error(`自动预览失败: ${e.message}`);
+      return [...keyLogs, out.error(`自动预览失败: ${e.message}`)].join('\n');
     }
   },
 });
@@ -165,6 +183,7 @@ export const ideUpload: CommandDef = defineCommand({
     { name: 'version', type: 'string', required: true, description: '版本号', alias: 'v' },
     { name: 'desc', type: 'string', default: '', description: '版本描述', alias: 'd' },
     { name: 'infoOutput', type: 'string', description: '上传信息输出路径', alias: 'i' },
+    { name: 'keyPath', type: 'string', description: 'CI 代码上传密钥路径' },
   ],
   handler: async (args, ctx) => {
     const cli = ensureCliPath(ctx);
@@ -175,14 +194,21 @@ export const ideUpload: CommandDef = defineCommand({
     if (args.desc) cliArgs.push('-d', args.desc);
     if (args.infoOutput) cliArgs.push('--info-output', args.infoOutput);
 
+    // CI 密钥检查
+    const ciKey = ensureCiKey(project, args.keyPath);
+    const keyLogs = ciKey.logs;
+    if (ciKey.keyPath) {
+      cliArgs.push('--upload-private-key', ciKey.keyPath);
+    }
+
     try {
-      const lines: string[] = [out.info(`上传中 (v${args.version})...`)];
+      const lines: string[] = [...keyLogs, out.info(`上传中 (v${args.version})...`)];
       const result = execCli(cli, cliArgs, { timeout: 300000 });
       lines.push(out.success(`上传完成: v${args.version}`));
       if (result) lines.push(out.dim(result));
       return lines.join('\n');
     } catch (e: any) {
-      return out.error(`上传失败: ${e.message}`);
+      return [...keyLogs, out.error(`上传失败: ${e.message}`)].join('\n');
     }
   },
 });
@@ -195,20 +221,30 @@ export const ideBuildNpm: CommandDef = defineCommand({
   category: CATEGORY,
   args: [
     { name: 'project', type: 'string', description: '项目路径', alias: 'p' },
+    { name: 'keyPath', type: 'string', description: 'CI 代码上传密钥路径' },
   ],
   handler: async (args, ctx) => {
     const cli = ensureCliPath(ctx);
     const project = resolveProject(args, ctx);
     if (!project) return out.error('请指定 --project 或先通过 config 设置默认项目');
 
+    const cliArgs = ['build-npm', '--project', project];
+
+    // CI 密钥检查
+    const ciKey = ensureCiKey(project, args.keyPath);
+    const keyLogs = ciKey.logs;
+    if (ciKey.keyPath) {
+      cliArgs.push('--upload-private-key', ciKey.keyPath);
+    }
+
     try {
-      const lines: string[] = [out.info('构建 NPM...')];
-      const result = execCli(cli, ['build-npm', '--project', project]);
+      const lines: string[] = [...keyLogs, out.info('构建 NPM...')];
+      const result = execCli(cli, cliArgs);
       lines.push(out.success('NPM 构建完成'));
       if (result) lines.push(out.dim(result));
       return lines.join('\n');
     } catch (e: any) {
-      return out.error(`NPM 构建失败: ${e.message}`);
+      return [...keyLogs, out.error(`NPM 构建失败: ${e.message}`)].join('\n');
     }
   },
 });

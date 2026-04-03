@@ -8,6 +8,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { findCliPath, execCli, parseLoginStatus } from './ide-cli.js';
+import { readAppId, getKeyPath, KEYS_DIR } from '../commands/config.js';
 import * as out from './output.js';
 import type { SharedContext } from '../context.js';
 
@@ -73,4 +74,56 @@ export function ensureLogin(ctx: SharedContext): EnsureLoginResult {
     logs.push(out.warn(`登录状态检查失败: ${e.message}，继续尝试连接...`));
     return { loggedIn: true, logs }; // 容错：不阻断
   }
+}
+
+// ==================== CI 密钥检查 ====================
+
+export interface EnsureCiKeyResult {
+  /** 密钥文件路径，null 表示未找到 */
+  keyPath: string | null;
+  /** appid，null 表示读取失败 */
+  appid: string | null;
+  /** 过程日志 */
+  logs: string[];
+}
+
+/**
+ * 检查 CI 代码上传密钥是否可用
+ * @param projectPath 小程序项目路径
+ * @param keyPathArg 命令行 --keyPath 参数（优先使用）
+ */
+export function ensureCiKey(projectPath: string, keyPathArg?: string): EnsureCiKeyResult {
+  const logs: string[] = [];
+
+  // 1. 命令行直接指定
+  if (keyPathArg) {
+    const absPath = resolve(keyPathArg);
+    if (existsSync(absPath)) {
+      return { keyPath: absPath, appid: readAppId(projectPath), logs };
+    }
+    logs.push(out.warn(`指定的密钥文件不存在: ${absPath}`));
+    return { keyPath: null, appid: null, logs };
+  }
+
+  // 2. 读取 appid
+  const appid = readAppId(projectPath);
+  if (!appid) {
+    logs.push(out.warn('无法从 project.config.json 读取 appid，跳过密钥检查'));
+    return { keyPath: null, appid: null, logs };
+  }
+
+  // 3. 查找已导入的密钥
+  const savedKey = getKeyPath(appid);
+  if (savedKey) {
+    logs.push(out.dim(`  CI 密钥: ${savedKey}`));
+    return { keyPath: savedKey, appid, logs };
+  }
+
+  // 4. 未找到，输出提示
+  logs.push(out.warn(`未找到小程序 ${appid} 的代码上传密钥`));
+  logs.push(out.dim('  请在「微信公众平台 → 开发管理 → 开发设置 → 小程序代码上传」生成密钥'));
+  logs.push(out.dim(`  下载后执行: wx-mp-cli config --keyPath <密钥文件路径> --project ${projectPath}`));
+  logs.push(out.dim(`  密钥将保存到: ${join(KEYS_DIR, appid + '.key')}`));
+
+  return { keyPath: null, appid, logs };
 }

@@ -73,7 +73,7 @@ registry.registerAll(allCommands);
 // 全局共享上下文（仅 REPL 模式使用）
 const ctx = new SharedContext();
 
-// 加载持久化配置（~/.wx-mp-cli-config.json）
+// 加载持久化配置（~/.weixin-miniprogram-cli/config.json）
 loadPersistedConfig(ctx);
 
 // ==================== 命令分类 ====================
