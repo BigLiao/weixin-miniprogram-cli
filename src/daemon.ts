@@ -444,6 +444,10 @@ async function gracefulShutdown(): Promise<void> {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 process.on('uncaughtException', (err) => {
+  if ((err as NodeJS.ErrnoException).code === 'EPIPE') {
+    logger.warn(`忽略 EPIPE: ${err.message}`);
+    return;
+  }
   logger.error(`未捕获异常: ${err.message}`);
   // 不调用 gracefulShutdown（可能会再抛异常导致无限递归）
   // 直接强制清理退出
