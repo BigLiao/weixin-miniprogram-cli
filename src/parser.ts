@@ -114,6 +114,7 @@ function tokenize(input: string): string[] {
 
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
+    const next = input[i + 1];
 
     if (escaped) {
       current += ch;
@@ -121,7 +122,7 @@ function tokenize(input: string): string[] {
       continue;
     }
 
-    if (ch === '\\') {
+    if (ch === '\\' && inQuote && (next === inQuote || next === '\\')) {
       escaped = true;
       continue;
     }
