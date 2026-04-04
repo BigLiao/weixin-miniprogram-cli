@@ -122,7 +122,9 @@ function tokenize(input: string): string[] {
       continue;
     }
 
-    if (ch === '\\' && inQuote && (next === inQuote || next === '\\')) {
+    const canEscapeInQuote = inQuote && (next === inQuote || next === '\\');
+    const canEscapeWhitespace = !inQuote && (next === ' ' || next === '\t');
+    if (ch === '\\' && (canEscapeInQuote || canEscapeWhitespace)) {
       escaped = true;
       continue;
     }
