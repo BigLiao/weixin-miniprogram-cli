@@ -28,6 +28,9 @@ export const ideOpen: CommandDef = defineCommand({
 
     try {
       const result = execCli(cli, cliArgs);
+      if (result.includes('[error]')) {
+        throw new Error(result);
+      }
       const lines = [out.success('IDE 已打开')];
       if (project) {
         lines.push(`  项目: ${project}`);

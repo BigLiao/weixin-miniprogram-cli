@@ -3,18 +3,134 @@
  */
 
 import { existsSync } from 'fs';
-import { execSync, spawnSync, type SpawnSyncOptions } from 'child_process';
+import { readFileSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { dirname, join, resolve } from 'path';
 import { SharedContext } from '../context.js';
 
 /** 常见安装路径 */
-const KNOWN_CLI_PATHS: string[] = [
+const MACOS_CLI_PATHS: string[] = [
   // macOS
   '/Applications/wechatwebdevtools.app/Contents/MacOS/cli',
   '/Applications/微信开发者工具.app/Contents/MacOS/cli',
+];
+
+const WINDOWS_CLI_PATHS: string[] = [
   // Windows
   'C:\\Program Files (x86)\\Tencent\\微信web开发者工具\\cli.bat',
   'C:\\Program Files\\Tencent\\微信web开发者工具\\cli.bat',
 ];
+
+const WINDOWS_PATH_ARGS = new Set([
+  '--project',
+  '--qr-output',
+  '--info-output',
+  '--upload-private-key',
+]);
+
+export function isWslEnvironment(): boolean {
+  if (process.platform !== 'linux') return false;
+  if (process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) return true;
+
+  try {
+    const version = readFileSync('/proc/version', 'utf-8');
+    return /microsoft/i.test(version);
+  } catch {
+    return false;
+  }
+}
+
+function isWindowsPath(p: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(p);
+}
+
+function toWslPath(p: string): string | null {
+  const normalized = p.replace(/\\/g, '/');
+  const match = normalized.match(/^([a-zA-Z]):\/(.*)$/);
+  if (!match) return null;
+
+  const [, drive, rest] = match;
+  return `/mnt/${drive.toLowerCase()}/${rest}`;
+}
+
+function toWindowsPath(p: string): string | null {
+  if (isWindowsPath(p)) return p;
+
+  const match = p.match(/^\/mnt\/([a-zA-Z])\/(.*)$/);
+  if (!match) return null;
+
+  const [, drive, rest] = match;
+  return `${drive.toUpperCase()}:\\${rest.replace(/\//g, '\\')}`;
+}
+
+function toWindowsInteropPath(p: string): string | null {
+  const directWindowsPath = toWindowsPath(p);
+  if (directWindowsPath) return directWindowsPath;
+
+  if (!isWslEnvironment()) return null;
+  if (!p.startsWith('/')) return null;
+
+  const distro = process.env.WSL_DISTRO_NAME;
+  if (!distro) return null;
+
+  return `\\\\wsl.localhost\\${distro}${p.replace(/\//g, '\\')}`;
+}
+
+function normalizeArgsForWindows(args: string[]): string[] {
+  const normalized: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    normalized.push(arg);
+
+    if (WINDOWS_PATH_ARGS.has(arg) && i + 1 < args.length) {
+      const next = args[i + 1];
+      const absolutePath = isWindowsPath(next) ? next : resolve(next);
+      normalized.push(toWindowsInteropPath(absolutePath) ?? next);
+      i++;
+    }
+  }
+
+  return normalized;
+}
+
+function resolveWslCliExecution(cliPath: string): { command: string; args: string[] } | null {
+  const windowsCliPath = toWindowsPath(cliPath);
+  if (!windowsCliPath) return null;
+
+  const cliDir = dirname(cliPath);
+  const windowsNodePath = join(cliDir, 'node.exe');
+  const windowsCliJsPath = toWindowsPath(join(cliDir, 'cli.js'));
+  if (!windowsCliJsPath || !existsSync(windowsNodePath)) {
+    return null;
+  }
+
+  return {
+    command: windowsNodePath,
+    args: [windowsCliJsPath],
+  };
+}
+
+function resolveExistingCliPath(candidate?: string | null): string | null {
+  if (!candidate) return null;
+  if (existsSync(candidate)) return candidate;
+
+  if (isWslEnvironment() && isWindowsPath(candidate)) {
+    const wslPath = toWslPath(candidate);
+    if (wslPath && existsSync(wslPath)) {
+      return wslPath;
+    }
+  }
+
+  return null;
+}
+
+function getKnownCliPaths(): string[] {
+  if (process.platform === 'darwin') return MACOS_CLI_PATHS;
+  if (process.platform === 'win32') return WINDOWS_CLI_PATHS;
+  if (isWslEnvironment()) return WINDOWS_CLI_PATHS.map(p => toWslPath(p) ?? p);
+  return [];
+}
 
 /**
  * 查找 IDE CLI 路径
@@ -22,20 +138,23 @@ const KNOWN_CLI_PATHS: string[] = [
  */
 export function findCliPath(ctx: SharedContext): string | null {
   // 1. 用户手动设置
-  if (ctx.cliPath && existsSync(ctx.cliPath)) {
-    return ctx.cliPath;
+  const configuredCli = resolveExistingCliPath(ctx.cliPath);
+  if (configuredCli) {
+    return configuredCli;
   }
 
   // 2. 环境变量
   const envPath = process.env.WECHAT_DEVTOOLS_CLI;
-  if (envPath && existsSync(envPath)) {
-    return envPath;
+  const resolvedEnvCli = resolveExistingCliPath(envPath);
+  if (resolvedEnvCli) {
+    return resolvedEnvCli;
   }
 
   // 3. 自动扫描
-  for (const p of KNOWN_CLI_PATHS) {
-    if (existsSync(p)) {
-      return p;
+  for (const p of getKnownCliPaths()) {
+    const resolved = resolveExistingCliPath(p);
+    if (resolved) {
+      return resolved;
     }
   }
 
@@ -66,32 +185,47 @@ export interface ExecCliOptions {
   inherit?: boolean;
 }
 
+function runCli(cliPath: string, args: string[], opts?: ExecCliOptions): ReturnType<typeof spawnSync> {
+  const timeout = opts?.timeout ?? 120000;
+  const encoding = 'utf-8';
+  const stdio = opts?.inherit ? 'inherit' : 'pipe';
+
+  if (isWslEnvironment()) {
+    const wslCliExecution = resolveWslCliExecution(cliPath);
+    if (wslCliExecution) {
+      const windowsArgs = normalizeArgsForWindows(args);
+      return spawnSync(wslCliExecution.command, [...wslCliExecution.args, ...windowsArgs], {
+        stdio,
+        timeout,
+        encoding,
+      });
+    }
+  }
+
+  return spawnSync(cliPath, args, {
+    stdio,
+    timeout,
+    encoding,
+  });
+}
+
 /**
  * 执行 IDE CLI 命令
  * @returns stdout 输出（inherit 模式返回空字符串）
  */
 export function execCli(cliPath: string, args: string[], opts?: ExecCliOptions): string {
-  const timeout = opts?.timeout ?? 120000;
+  const result = runCli(cliPath, args, opts);
 
-  if (opts?.inherit) {
-    // inherit 模式：直接显示到终端（用于 login 二维码等）
-    const result = spawnSync(cliPath, args, {
-      stdio: 'inherit',
-      timeout,
-      encoding: 'utf-8',
-    });
-    if (result.error) {
-      throw result.error;
-    }
-    if (result.status !== 0) {
-      throw new Error(`CLI 退出码: ${result.status}`);
-    }
-    return '';
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+    throw new Error(stderr ? `CLI 退出码: ${result.status}\n${stderr}` : `CLI 退出码: ${result.status}`);
   }
 
-  // pipe 模式：捕获输出
-  const cmd = `"${cliPath}" ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`;
-  return execSync(cmd, { encoding: 'utf-8', timeout }).trim();
+  if (opts?.inherit) return '';
+  return typeof result.stdout === 'string' ? result.stdout.trim() : '';
 }
 
 /**
