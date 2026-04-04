@@ -5,3 +5,6 @@ build/
 
 .claude/
 .agent/
+.codex
+.codex/
+package-lock.json

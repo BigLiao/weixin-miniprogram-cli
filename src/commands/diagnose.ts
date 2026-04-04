@@ -5,10 +5,10 @@
 import { defineCommand, type CommandDef } from '../registry.js';
 import * as out from '../utils/output.js';
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { findCliPath, parseLoginStatus } from '../utils/ide-cli.js';
+import { execCli, findCliPath, isWslEnvironment, parseLoginStatus } from '../utils/ide-cli.js';
 import { isDaemonRunning, getDaemonPid, sendCommand } from '../client.js';
 
 function getVersion(): string {
@@ -29,6 +29,12 @@ function isDevToolsRunning(): boolean {
       const result = execSync('pgrep -f "wechatwebdevtools" 2>/dev/null || true', { encoding: 'utf-8' });
       return !!result.trim();
     }
+    if (isWslEnvironment()) {
+      const result = spawnSync('tasklist.exe', ['/FI', 'IMAGENAME eq wechatdevtools.exe'], {
+        encoding: 'utf-8',
+      });
+      return typeof result.stdout === 'string' && result.stdout.toLowerCase().includes('wechatdevtools');
+    }
     if (process.platform === 'win32') {
       const result = execSync('tasklist /FI "IMAGENAME eq wechatdevtools.exe" 2>nul', { encoding: 'utf-8' });
       return result.includes('wechatdevtools');
@@ -37,6 +43,14 @@ function isDevToolsRunning(): boolean {
   } catch {
     return false;
   }
+}
+
+function getEnvironmentLabel(): string {
+  if (isWslEnvironment()) {
+    const distro = process.env.WSL_DISTRO_NAME || 'unknown';
+    return `WSL (${distro}) on Windows [node=${process.platform} ${process.arch}]`;
+  }
+  return `${process.platform} ${process.arch}`;
 }
 
 export const doctorCommand: CommandDef = defineCommand({
@@ -64,7 +78,7 @@ export const doctorCommand: CommandDef = defineCommand({
     } else {
       fail('Node.js 版本过低，需要 >=16');
     }
-    lines.push(`  OS:        ${process.platform} ${process.arch}`);
+    lines.push(`  OS:        ${getEnvironmentLabel()}`);
 
     try {
       const pkgPath = require.resolve('miniprogram-automator/package.json');
@@ -92,7 +106,7 @@ export const doctorCommand: CommandDef = defineCommand({
 
     if (cliPath) {
       try {
-        const status = execSync(`"${cliPath}" islogin 2>/dev/null`, { encoding: 'utf-8', timeout: 30000 }).trim();
+        const status = execCli(cliPath, ['islogin'], { timeout: 30000 }).trim();
         if (parseLoginStatus(status)) {
           pass('已登录');
         } else {
