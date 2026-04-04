@@ -7,6 +7,7 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
 import { SOCKET_PATH, PID_FILE } from './constants.js';
 
 export interface DaemonResponse {
@@ -16,7 +17,7 @@ export interface DaemonResponse {
 }
 
 const COMMAND_TIMEOUT_MS = 120_000; // 2 分钟（connect 可能很慢）
-const STARTUP_TIMEOUT_MS = 15_000;  // daemon 启动超时
+const STARTUP_TIMEOUT_MS = 45_000;  // daemon 启动超时（Windows 冷启动更慢）
 const STARTUP_POLL_MS = 200;        // 轮询间隔
 
 /**
@@ -123,8 +124,9 @@ export async function startDaemon(): Promise<number> {
   }
 
   // 找到 daemon.js 路径（相对于当前模块）
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const daemonPath = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
+    moduleDir,
     // 如果是 build/ 目录下运行
     'daemon.js',
   );

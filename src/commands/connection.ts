@@ -7,6 +7,7 @@ import { defineCommand, type CommandDef } from '../registry.js';
 import { SharedContext, NETWORK_BUFFER_SIZE } from '../context.js';
 import * as out from '../utils/output.js';
 import { validateProjectPath } from '../utils/preflight.js';
+import { ensureCliPath, execCli } from '../utils/ide-cli.js';
 
 // @ts-ignore - miniprogram-automator 没有类型定义
 import automator from 'miniprogram-automator';
@@ -156,6 +157,22 @@ async function initAppInfo(ctx: SharedContext): Promise<string[]> {
   return lines;
 }
 
+async function connectByWsEndpoint(wsEndpoint: string, timeoutMs: number): Promise<any> {
+  const start = Date.now();
+  let lastError: any = null;
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      return await automator.connect({ wsEndpoint });
+    } catch (e: any) {
+      lastError = e;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  throw lastError || new Error(`连接超时: ${wsEndpoint}`);
+}
+
 export const connectDevtools: CommandDef = defineCommand({
   name: 'open',
   description: '连接到微信开发者工具（支持多种策略）',
@@ -190,11 +207,27 @@ export const connectDevtools: CommandDef = defineCommand({
       } else if (args.project) {
         // 校验并转为绝对路径
         const projectPath = validateProjectPath(args.project);
-        const launchOpts: any = { projectPath };
-        if (args.cliPath) launchOpts.cliPath = args.cliPath;
-        if (args.autoPort) launchOpts.port = args.autoPort;
-        lines.push(out.dim(`启动项目: ${projectPath}...`));
-        mp = await automator.launch(launchOpts);
+        const autoPort = args.autoPort || 9420;
+
+        if (process.platform === 'win32') {
+          const cliPath = args.cliPath || ensureCliPath(ctx);
+          const wsEndpoint = `ws://127.0.0.1:${autoPort}`;
+
+          lines.push(out.dim(`打开项目: ${projectPath}...`));
+          execCli(cliPath, ['open', '--project', projectPath], { timeout: args.timeout });
+
+          lines.push(out.dim(`启用自动化端口: ${autoPort}...`));
+          execCli(cliPath, ['auto', '--project', projectPath, '--auto-port', String(autoPort)], { timeout: args.timeout });
+
+          lines.push(out.dim(`连接到 ${wsEndpoint}...`));
+          mp = await connectByWsEndpoint(wsEndpoint, args.timeout || 45000);
+        } else {
+          const launchOpts: any = { projectPath };
+          if (args.cliPath) launchOpts.cliPath = args.cliPath;
+          if (args.autoPort) launchOpts.port = args.autoPort;
+          lines.push(out.dim(`启动项目: ${projectPath}...`));
+          mp = await automator.launch(launchOpts);
+        }
       } else {
         throw new Error('请指定 --project 或 --ws 或 --browserUrl');
       }

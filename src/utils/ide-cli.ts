@@ -3,7 +3,7 @@
  */
 
 import { existsSync } from 'fs';
-import { execSync, spawnSync, type SpawnSyncOptions } from 'child_process';
+import { spawnSync } from 'child_process';
 import { SharedContext } from '../context.js';
 
 /** 常见安装路径 */
@@ -66,32 +66,50 @@ export interface ExecCliOptions {
   inherit?: boolean;
 }
 
+function quotePowerShellArg(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
 /**
  * 执行 IDE CLI 命令
  * @returns stdout 输出（inherit 模式返回空字符串）
  */
 export function execCli(cliPath: string, args: string[], opts?: ExecCliOptions): string {
   const timeout = opts?.timeout ?? 120000;
+  const isWindows = process.platform === 'win32';
+  const command = isWindows ? 'powershell.exe' : cliPath;
+  const commandArgs = isWindows
+    ? [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `& ${quotePowerShellArg(cliPath)} ${args.map(arg => quotePowerShellArg(arg)).join(' ')}`,
+      ]
+    : args;
+
+  const result = spawnSync(command, commandArgs, {
+    stdio: opts?.inherit ? 'inherit' : 'pipe',
+    timeout,
+    encoding: 'utf-8',
+    windowsHide: true,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.trim();
+    const stdout = result.stdout?.trim();
+    const detail = stderr || stdout;
+    throw new Error(detail ? `CLI 退出码: ${result.status}\n${detail}` : `CLI 退出码: ${result.status}`);
+  }
 
   if (opts?.inherit) {
-    // inherit 模式：直接显示到终端（用于 login 二维码等）
-    const result = spawnSync(cliPath, args, {
-      stdio: 'inherit',
-      timeout,
-      encoding: 'utf-8',
-    });
-    if (result.error) {
-      throw result.error;
-    }
-    if (result.status !== 0) {
-      throw new Error(`CLI 退出码: ${result.status}`);
-    }
     return '';
   }
 
-  // pipe 模式：捕获输出
-  const cmd = `"${cliPath}" ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`;
-  return execSync(cmd, { encoding: 'utf-8', timeout }).trim();
+  return result.stdout?.trim() || '';
 }
 
 /**
