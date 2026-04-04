@@ -202,11 +202,30 @@ function runCli(cliPath: string, args: string[], opts?: ExecCliOptions): ReturnT
     }
   }
 
+  if (process.platform === 'win32') {
+    return spawnSync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `& ${quotePowerShellArg(cliPath)} ${args.map(arg => quotePowerShellArg(arg)).join(' ')}`,
+    ], {
+      stdio,
+      timeout,
+      encoding,
+      windowsHide: true,
+    });
+  }
+
   return spawnSync(cliPath, args, {
     stdio,
     timeout,
     encoding,
+    windowsHide: true,
   });
+}
+
+function quotePowerShellArg(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 /**
@@ -221,7 +240,9 @@ export function execCli(cliPath: string, args: string[], opts?: ExecCliOptions):
   }
   if (result.status !== 0) {
     const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
-    throw new Error(stderr ? `CLI 退出码: ${result.status}\n${stderr}` : `CLI 退出码: ${result.status}`);
+    const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+    const detail = stderr || stdout;
+    throw new Error(detail ? `CLI 退出码: ${result.status}\n${detail}` : `CLI 退出码: ${result.status}`);
   }
 
   if (opts?.inherit) return '';
