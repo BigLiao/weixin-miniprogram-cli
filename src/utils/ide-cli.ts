@@ -24,6 +24,7 @@ const WINDOWS_CLI_PATHS: string[] = [
 const WINDOWS_PATH_ARGS = new Set([
   '--project',
   '--qr-output',
+  '--result-output',
   '--info-output',
   '--upload-private-key',
 ]);
@@ -185,6 +186,26 @@ export interface ExecCliOptions {
   inherit?: boolean;
 }
 
+export interface ResolveIdeProjectTargetOptions {
+  /** 是否必须解析出项目目标，默认 true */
+  required?: boolean;
+}
+
+export interface IdeProjectTarget {
+  /** 传给官方 CLI 的项目参数 */
+  cliArgs: string[];
+  /** 用户可读标签，用于日志输出 */
+  label: string;
+  /** 目标来源 */
+  source: 'project' | 'appid';
+  /** 规范化后的项目路径 */
+  project?: string;
+  /** AppID */
+  appid?: string;
+  /** 第三方平台开发时的 ext-appid */
+  extAppid?: string;
+}
+
 function runCli(cliPath: string, args: string[], opts?: ExecCliOptions): ReturnType<typeof spawnSync> {
   const timeout = opts?.timeout ?? 120000;
   const encoding = 'utf-8';
@@ -250,11 +271,67 @@ export function execCli(cliPath: string, args: string[], opts?: ExecCliOptions):
 }
 
 /**
- * 解析项目路径：优先用户传入，其次 ctx.defaultProject
+ * 解析 IDE 项目目标：优先 --project / defaultProject，其次 --appid / --ext-appid
+ *
+ * 与官方 CLI 保持一致：如果提供了 --project，则忽略 --appid / --ext-appid。
  */
-export function resolveProject(args: Record<string, any>, ctx: SharedContext): string | undefined {
+export function resolveIdeProjectTarget(
+  args: Record<string, any>,
+  ctx: SharedContext,
+  options: { required: false },
+): IdeProjectTarget | null;
+export function resolveIdeProjectTarget(
+  args: Record<string, any>,
+  ctx: SharedContext,
+  options?: ResolveIdeProjectTargetOptions,
+): IdeProjectTarget;
+export function resolveIdeProjectTarget(
+  args: Record<string, any>,
+  ctx: SharedContext,
+  options?: ResolveIdeProjectTargetOptions,
+): IdeProjectTarget | null {
+  const required = options?.required ?? true;
   const project = args.project || ctx.defaultProject;
-  return project ? String(project) : undefined;
+
+  if (project) {
+    const resolvedProject = String(project);
+    return {
+      cliArgs: ['--project', resolvedProject],
+      label: resolvedProject,
+      source: 'project',
+      project: resolvedProject,
+    };
+  }
+
+  const appid = args.appid ? String(args.appid) : undefined;
+  const extAppid = args['ext-appid'] ? String(args['ext-appid']) : undefined;
+
+  if (extAppid && !appid) {
+    throw new Error('使用 --ext-appid 时必须同时指定 --appid');
+  }
+
+  if (appid) {
+    const cliArgs = ['--appid', appid];
+    const labelParts = [`AppID: ${appid}`];
+    if (extAppid) {
+      cliArgs.push('--ext-appid', extAppid);
+      labelParts.push(`ExtAppID: ${extAppid}`);
+    }
+
+    return {
+      cliArgs,
+      label: labelParts.join(', '),
+      source: 'appid',
+      appid,
+      extAppid,
+    };
+  }
+
+  if (!required) {
+    return null;
+  }
+
+  throw new Error('请指定 --project，或使用 --appid/--ext-appid；也可以先通过 config 设置默认项目');
 }
 
 /**
