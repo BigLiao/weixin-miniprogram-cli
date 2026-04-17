@@ -56,7 +56,7 @@ export function coerceArgs(args: Record<string, any>, defs: ArgDef[]): Record<st
 
   for (const def of defs) {
     // 支持别名
-    let value = args[def.name] ?? (def.alias ? args[def.alias] : undefined);
+    let value = readArgValue(args, def);
 
     if (value === undefined) {
       if (def.required) {
@@ -101,6 +101,34 @@ export function coerceArgs(args: Record<string, any>, defs: ArgDef[]): Record<st
   }
 
   return result;
+}
+
+function readArgValue(args: Record<string, any>, def: ArgDef): any {
+  for (const name of getArgNameVariants(def.name)) {
+    if (args[name] !== undefined) {
+      return args[name];
+    }
+  }
+
+  if (def.alias && args[def.alias] !== undefined) {
+    return args[def.alias];
+  }
+
+  return undefined;
+}
+
+function getArgNameVariants(name: string): string[] {
+  const names = new Set<string>([name]);
+
+  if (name.includes('-')) {
+    names.add(name.replace(/-([a-z])/g, (_match, ch: string) => ch.toUpperCase()));
+  }
+
+  if (/[A-Z]/.test(name)) {
+    names.add(name.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`));
+  }
+
+  return Array.from(names);
 }
 
 /**

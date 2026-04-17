@@ -34,7 +34,7 @@ wx-mp-cli close
 - 交互前先 `snapshot`，获取页面元素树和 CSS selector。
 - 页面跳转/返回/重启后，重新 `snapshot`，不复用旧 selector。
 - 参数不确定时 `help <command>`，不要 `help --detail`。
-- 任务依赖项目路径但用户未提供时，先确认路径。
+- 任务依赖 IDE 项目目标但用户未提供时，先确认项目路径或 AppID。
 - 截图审查 UI 后删除临时文件。任务结束后 `close`。
 
 ## Task Playbooks
@@ -72,8 +72,11 @@ wx-mp-cli assert-text ".welcome" --textContains "testuser"
 
 ```bash
 wx-mp-cli preview --project /path/to/miniprogram
+wx-mp-cli preview --appid wx1234567890
 wx-mp-cli upload --project /path/to/miniprogram --version 1.0.0 --desc "release"
-wx-mp-cli build-npm --project /path/to/miniprogram
+wx-mp-cli upload --appid wx1234567890 --version 1.0.0 --desc "release"
+wx-mp-cli build-npm --project /path/to/miniprogram --compile-type plugin
+wx-mp-cli auto --project /path/to/miniprogram --auto-account <openid>
 ```
 
 ### 网络请求调试
@@ -128,7 +131,7 @@ wx-mp-cli reconnect
 ## Failure Handling
 
 - 环境或连接异常：先 `doctor`。
-- 登录问题：先 `islogin` 或 `login`。
+- 登录问题：先 `islogin` 或 `login --qr-size default`。
 - 元素找不到：重新 `snapshot`，确认 selector 有效，使用唯一 selector。
 - 网络请求为空：尝试 `relaunch` 重新加载页面。
 - daemon 挂掉：`daemon stop` 后重新 `open`。

@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+- **IDE CLI 参数对齐**: `login` 补充 `--qr-size` / `--result-output`，`build-npm` 补充 `--compile-type`，`auto` 补充 `--auto-account`
+- **通用项目参数**: IDE 命令统一支持 `--appid` / `--ext-appid`，并保持 `--project` 优先级更高
+
+### Bug Fixes
+
+- **cache 参数兼容**: `cache` 改为走官方 CLI 的 `--clean`，并兼容旧的 `--type` 输入转发
+- **WSL 路径转发**: 补充 `--result-output` 的 Windows/WSL 路径归一化
+
 ## [1.1.1] - 2026-04-04
 
 ### Bug Fixes

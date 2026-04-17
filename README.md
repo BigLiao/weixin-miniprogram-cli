@@ -144,15 +144,30 @@ wx-mp-cli storage --action clear
 
 ```bash
 wx-mp-cli ide-open --project ./my-app      # 打开项目
-wx-mp-cli login                            # 登录（终端显示二维码）
+wx-mp-cli ide-open --appid wx1234567890    # 按 AppID 打开目标
+wx-mp-cli login --qr-size default          # 登录（终端显示二维码）
+wx-mp-cli login --result-output ./login.json
 wx-mp-cli islogin                          # 检查登录状态
 wx-mp-cli upload --version 1.0.0           # 上传代码
+wx-mp-cli upload --appid wx1234567890 --version 1.0.0
 wx-mp-cli preview --project ./my-app       # 预览（生成二维码）
-wx-mp-cli build-npm                        # 构建 NPM
-wx-mp-cli auto --project ./my-app          # 开启自动化端口
+wx-mp-cli preview --appid wx1234567890
+wx-mp-cli build-npm --compile-type plugin  # 构建 NPM
+wx-mp-cli auto --project ./my-app --auto-account <openid>
+wx-mp-cli cache --clean compile            # 清理工具缓存
 wx-mp-cli ide-close                        # 关闭项目窗口
 wx-mp-cli quit                             # 退出开发者工具
 ```
+
+相关 IDE 命令统一支持项目目标参数：
+
+```bash
+--project <path>           # 项目路径
+--appid <appid>            # 小程序 AppID 或第三方平台 AppID
+--ext-appid <ext-appid>    # 第三方平台开发时被开发 AppID
+```
+
+如果同时传了 `--project` 和 `--appid` / `--ext-appid`，会优先使用 `--project`。
 
 ### 诊断
 
