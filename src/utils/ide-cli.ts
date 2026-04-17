@@ -291,20 +291,19 @@ export function resolveIdeProjectTarget(
   options?: ResolveIdeProjectTargetOptions,
 ): IdeProjectTarget | null {
   const required = options?.required ?? true;
-  const project = args.project || ctx.defaultProject;
-
-  if (project) {
-    const resolvedProject = String(project);
-    return {
-      cliArgs: ['--project', resolvedProject],
-      label: resolvedProject,
-      source: 'project',
-      project: resolvedProject,
-    };
-  }
-
+  const explicitProject = args.project ? String(args.project) : undefined;
   const appid = args.appid ? String(args.appid) : undefined;
   const extAppid = args['ext-appid'] ? String(args['ext-appid']) : undefined;
+  const defaultProject = ctx.defaultProject ? String(ctx.defaultProject) : undefined;
+
+  if (explicitProject) {
+    return {
+      cliArgs: ['--project', explicitProject],
+      label: explicitProject,
+      source: 'project',
+      project: explicitProject,
+    };
+  }
 
   if (extAppid && !appid) {
     throw new Error('使用 --ext-appid 时必须同时指定 --appid');
@@ -324,6 +323,15 @@ export function resolveIdeProjectTarget(
       source: 'appid',
       appid,
       extAppid,
+    };
+  }
+
+  if (defaultProject) {
+    return {
+      cliArgs: ['--project', defaultProject],
+      label: defaultProject,
+      source: 'project',
+      project: defaultProject,
     };
   }
 
