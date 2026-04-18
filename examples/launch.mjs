@@ -156,8 +156,8 @@ async function main() {
   console.log('   # 在 REPL 中连接');
   console.log(`   wx> connect_devtools --project ${DEMO_PROJECT}`);
   console.log('');
-  console.log('   # 或运行集成测试');
-  console.log('   npm run test:all');
+  console.log('   # 或运行当前单元测试');
+  console.log('   npm test');
   console.log('═'.repeat(50));
 }
 

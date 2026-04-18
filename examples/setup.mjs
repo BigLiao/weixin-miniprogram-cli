@@ -43,7 +43,7 @@ async function main() {
   console.log('下一步:');
   console.log('  1. npm run launch        # 启动开发者工具 + 登录');
   console.log('  2. npm start             # 进入 CLI REPL');
-  console.log('  3. npm run test:all      # 运行集成测试');
+  console.log('  3. npm test              # 运行单元测试');
 }
 
 main().catch(e => {

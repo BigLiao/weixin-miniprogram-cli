@@ -20,6 +20,8 @@
     "clean": "rm -rf build",
     "prebuild": "rm -rf build",
     "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "node build/cli.js",
     "dev": "npx tsx src/cli.ts",
     "prepublishOnly": "npm run build"
@@ -55,6 +57,7 @@
     "@types/minimist": "^1.2.5",
     "@types/node": "^20.0.0",
     "miniprogram-ci": "^2.1.31",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^0.34.6"
   }
 }

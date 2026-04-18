@@ -28,6 +28,17 @@ npm install && npm run build && npm link
 
 **前置条件：** Node.js >= 16，已安装[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)并开启 **设置 → 安全设置 → 服务端口**。
 
+## 测试
+
+仓库已切换到正式单元测试框架 `vitest`。
+
+```bash
+npm test
+npm run test:watch
+```
+
+当前首批用例覆盖命令解析、上下文状态管理和项目路径校验等稳定基础能力；后续命令级行为可以继续在此基础上补齐。
+
 ### 安装 Skill
 
 通过自带命令可以自动安装 Skill。

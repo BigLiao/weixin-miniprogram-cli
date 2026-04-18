@@ -2,7 +2,7 @@
 
 ## miniprogram-demo
 
-自定义的微信小程序示例项目，用于 CLI 集成测试。
+自定义的微信小程序示例项目，用于 CLI 手工联调和集成验证。
 
 ### 项目结构
 
@@ -20,30 +20,8 @@ npm run launch
 # 确保开启：设置 → 安全 → 服务端口
 ```
 
-## test-scripts
-
-CLI 集成测试脚本，覆盖全部命令。
-
-| 测试文件 | 覆盖命令 | 数量 |
-|---------|---------|------|
-| test-connection.mjs | open/launch/close/status | 4 |
-| test-page.mjs | page/query/wait/snapshot | 4 |
-| test-input.mjs | click/fill/value | 3 |
-| test-navigate.mjs | goto/go-back/relaunch | 3 |
-| test-assert.mjs | assert-text/assert-attr/assert-state | 3 |
-| test-console.mjs | console/console-detail | 2 |
-| test-network.mjs | network/network-detail/network-clear/network-stop | 4 |
-| test-screenshot-script.mjs | screenshot/eval | 2 |
-| test-diagnose.mjs | doctor | 1 |
-
-### 运行测试
+仓库测试现已迁移到根目录的 `vitest` 单元测试，运行方式为：
 
 ```bash
-# 全部测试
-npm run test:all
-
-# 单组测试
-npm run test:connection
-npm run test:page
-npm run test:diagnose
+npm test
 ```
