@@ -12,10 +12,15 @@ import * as out from '../utils/output.js';
 const listSessionsMeta = {
   name: 'session list',
   description: '列出所有 session（当前项目槽位）',
+  longDescription: 'session 只表示当前仍在使用的项目槽位。状态为 opened、connected、error，不再保留 disconnected/dead 历史会话。',
   category: 'Session 管理',
   args: [
     { name: 'probe', type: 'boolean', default: false, description: '探活：检测 connected session 是否仍然可用' },
   ] as ArgDef[],
+  examples: [
+    { cmd: 'session list', desc: '列出所有当前 session' },
+    { cmd: 'session list --probe', desc: '探活已连接的 session，并将异常 session 标记为 error' },
+  ],
 };
 
 const useSessionMeta = {
@@ -25,6 +30,9 @@ const useSessionMeta = {
   args: [
     { name: 'id', type: 'string', required: true, description: '目标 session ID' },
   ] as ArgDef[],
+  examples: [
+    { cmd: 'session use --id agent-a', desc: '将 agent-a 设为默认 session' },
+  ],
 };
 
 function buildListHandler(sessionMgr: SessionManager) {
@@ -94,15 +102,19 @@ export function createSessionCommands(sessionMgr: SessionManager): CommandDef[] 
     defineCommand({
       name: 'sessions',
       description: '列出所有 session（兼容旧命令）',
+      longDescription: '兼容旧命令，等价于 session list。',
       category: 'Session 管理',
       args: listSessionsMeta.args,
+      examples: listSessionsMeta.examples,
       handler: listHandler,
     }),
     defineCommand({
       name: 'switch-session',
       description: '切换默认活跃 session（兼容旧命令）',
+      longDescription: '兼容旧命令，等价于 session use。',
       category: 'Session 管理',
       args: useSessionMeta.args,
+      examples: useSessionMeta.examples,
       handler: useHandler,
     }),
   ];
@@ -116,15 +128,19 @@ export const sessionCommandDefs: CommandDef[] = [
   defineCommand({
     name: 'sessions',
     description: '列出所有 session（兼容旧命令）',
+    longDescription: '兼容旧命令，等价于 session list。',
     category: 'Session 管理',
     args: listSessionsMeta.args,
+    examples: listSessionsMeta.examples,
     handler: placeholderHandler,
   }),
   defineCommand({
     name: 'switch-session',
     description: '切换默认活跃 session（兼容旧命令）',
+    longDescription: '兼容旧命令，等价于 session use。',
     category: 'Session 管理',
     args: useSessionMeta.args,
+    examples: useSessionMeta.examples,
     handler: placeholderHandler,
   }),
 ];

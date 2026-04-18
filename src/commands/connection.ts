@@ -295,6 +295,7 @@ async function closeSession(ctx: SharedContext): Promise<string[]> {
 const openDevtools: CommandDef = defineCommand({
   name: 'open',
   description: '打开 IDE 项目并创建 session',
+  longDescription: '只负责 IDE / 项目窗口生命周期，不会自动启动 automator。需要自动化操作时，再执行 launch。',
   category: '连接管理',
   args: [
     { name: 'project', type: 'string', required: true, description: '小程序项目绝对路径', alias: 'p' },
@@ -302,12 +303,17 @@ const openDevtools: CommandDef = defineCommand({
     { name: 'cliPath', type: 'string', description: '微信开发者工具 CLI 路径' },
     { name: 'timeout', type: 'number', default: 45000, description: '命令超时(ms)' },
   ],
+  examples: [
+    { cmd: 'open ./my-miniprogram', desc: '打开项目并创建默认 session' },
+    { cmd: 'open ./my-miniprogram --port 41917 --session agent-a', desc: '指定 IDE HTTP 端口和 session ID' },
+  ],
   handler: async (args, ctx) => (await openProject(args, ctx)).join('\n'),
 });
 
 const launchDevtools: CommandDef = defineCommand({
   name: 'launch',
   description: '启动 automator 并连接当前 session',
+  longDescription: '负责 automator 生命周期。默认复用当前 session 已打开的项目；如果当前 session 尚未 open，可以在 launch 中直接传入 --project。',
   category: '连接管理',
   args: [
     { name: 'project', type: 'string', description: '小程序项目绝对路径（当前 session 未 open 时必填）', alias: 'p' },
@@ -319,23 +325,40 @@ const launchDevtools: CommandDef = defineCommand({
     { name: 'testTicket', type: 'string', description: '传递给 CLI auto 的 --test-ticket' },
     { name: 'timeout', type: 'number', default: 45000, description: '命令超时(ms)' },
   ],
+  examples: [
+    { cmd: 'launch --auto-port 9420', desc: '为当前 session 启动 automator 并连接到 9420' },
+    { cmd: 'launch --project ./my-miniprogram --port 41917 --auto-port 9420', desc: '未 open 时一步完成打开项目并启动 automator' },
+  ],
   handler: async (args, ctx) => (await launchAutomation(args, ctx)).join('\n'),
 });
 
 const closeDevtools: CommandDef = defineCommand({
   name: 'close',
   description: '关闭项目窗口并销毁当前 session',
+  longDescription: '关闭 IDE 项目窗口，断开 automator，并删除当前 session。使用 --all 时会依次清理所有 session。',
   category: '连接管理',
-  args: [],
+  args: [
+    { name: 'all', type: 'boolean', default: false, description: '关闭并清理所有 session' },
+  ],
+  examples: [
+    { cmd: 'close', desc: '关闭当前 session 绑定的项目并销毁 session' },
+    { cmd: 'close --session agent-a', desc: '关闭指定 session' },
+    { cmd: 'close --all', desc: '关闭并清理所有 session' },
+  ],
   handler: async (_args, ctx) => (await closeSession(ctx)).join('\n'),
 });
 
 const getConnectionStatus: CommandDef = defineCommand({
   name: 'status',
   description: '获取当前 session 状态',
+  longDescription: '显示当前 session 的状态、项目路径、IDE HTTP 端口和 automator 端口。状态只会是 opened、connected、error 或 idle。',
   category: '连接管理',
   args: [
     { name: 'refresh', type: 'boolean', default: true, description: 'connected 时刷新当前页面信息' },
+  ],
+  examples: [
+    { cmd: 'status', desc: '查看当前默认 session 的状态' },
+    { cmd: 'status --session agent-a', desc: '查看指定 session 的状态' },
   ],
   handler: async (args, ctx) => {
     const lines: string[] = [];
