@@ -92,11 +92,11 @@ describeE2E('wx-mp-cli e2e smoke', () => {
   it('navigates to the login page and asserts stable text', () => {
     expect(artifactDir).not.toBeNull();
 
-    const gotoResult = runCli(['goto', 'pages/login/login'], {
+    const gotoResult = runCli(['relaunch', 'pages/login/login'], {
       artifactDir: artifactDir!,
       label: 'goto-login',
     });
-    expect(gotoResult.combinedOutput).toContain('导航到:');
+    expect(gotoResult.combinedOutput).toContain('重启并导航到: pages/login/login');
 
     const pageResult = runCli(['page'], {
       artifactDir: artifactDir!,

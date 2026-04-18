@@ -2,10 +2,19 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-18
+
 ### Features
 
 - **IDE CLI 参数对齐**: `login` 补充 `--qr-size` / `--result-output`，`build-npm` 补充 `--compile-type`，`auto` 补充 `--auto-account`
 - **通用项目参数**: IDE 命令统一支持 `--appid` / `--ext-appid`，并保持 `--project` 优先级更高
+
+### Tests
+
+- **正式单元测试框架**: 引入 `vitest`，将仓库测试迁移为可维护的正式单元测试，覆盖解析器、上下文状态和前置校验等基础能力
+- **真实 E2E 冒烟链路**: 新增基于 `examples/miniprogram-demo` 的 smoke 用例，真实验证 `build-npm`、`open`、`launch`、`page`、`snapshot`、`screenshot`、`goto` 和文本断言
+- **真实表单关键路径**: 新增登录表单 E2E，用例覆盖手机号输入逻辑、协议勾选、提交按钮点击以及 `/login/getSendMessage` 网络请求校验
+- **E2E 工件归档**: 新增命令日志、截图、快照输出和串行执行配置，降低微信开发者工具环境下的并发干扰
 
 ### Bug Fixes
 
