@@ -116,23 +116,23 @@ function resolveSessionForRequest(command: string, args: Record<string, any>, re
 
   if (command === 'open') {
     const session = sessionMgr.create(reqSession || undefined);
-    if (!sessionMgr.activeId) {
-      sessionMgr.setActive(session.id);
-    }
+    sessionMgr.setActive(session.id);
     applyGlobalConfig(session);
     return session;
   }
 
   if (command === 'launch') {
     let session: Session;
+    let created = false;
     if (reqSession && sessionMgr.get(reqSession)) {
       session = sessionMgr.get(reqSession)!;
     } else if (args.project) {
       session = sessionMgr.create(reqSession || undefined);
+      created = true;
     } else {
       session = sessionMgr.resolve(reqSession);
     }
-    if (!sessionMgr.activeId) {
+    if (created) {
       sessionMgr.setActive(session.id);
     }
     applyGlobalConfig(session);
