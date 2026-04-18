@@ -1,6 +1,6 @@
 /**
- * 连接管理命令组 (4个)
- * open, reconnect, close, status
+ * 连接管理命令组
+ * open, launch, close, status
  */
 
 import { defineCommand, type CommandDef } from '../registry.js';
@@ -12,13 +12,9 @@ import { ensureCliPath, execCli } from '../utils/ide-cli.js';
 // @ts-ignore - miniprogram-automator 没有类型定义
 import automator from 'miniprogram-automator';
 
-/**
- * 启动 Console 和 Network 自动监听
- */
 async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
   const logs: string[] = [];
 
-  // 自动启动 Console 监听
   try {
     if (ctx.miniProgram && !ctx.consoleListening) {
       ctx.miniProgram.on('console', (msg: any) => {
@@ -34,17 +30,14 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
     logs.push(`Console 监听启动失败: ${e.message}`);
   }
 
-  // 自动启动 Network 监听（通过 mockWxMethod 拦截 wx.request）
   try {
     if (ctx.miniProgram && !ctx.networkListening) {
-      // 先在小程序端初始化日志数组和缓冲区大小
       const bufferSize = NETWORK_BUFFER_SIZE;
       await ctx.miniProgram.evaluate(`function() {
         wx.__networkLogs = wx.__networkLogs || [];
         wx.__networkBufferSize = ${bufferSize};
       }`);
 
-      // 使用 mockWxMethod 拦截 wx.request
       await ctx.miniProgram.mockWxMethod('request', function(options: any) {
         const start = Date.now();
         const entry: any = {
@@ -65,7 +58,6 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
         // @ts-ignore
         const logs = wx.__networkLogs;
         logs.push(entry);
-        // 环形缓冲区：超出上限时丢弃最旧的
         // @ts-ignore
         const maxSize = wx.__networkBufferSize || 200;
         if (logs.length > maxSize) {
@@ -90,7 +82,6 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
           if (origFail) origFail.call(this, err);
         };
 
-        // 调用原始 wx.request
         // @ts-ignore
         return this.origin(options);
       });
@@ -105,10 +96,6 @@ async function setupAutoMonitoring(ctx: SharedContext): Promise<string[]> {
   return logs;
 }
 
-/**
- * 获取小程序路由信息（pages、tabBar）
- * 通过运行时 __wxConfig 读取 app.json 配置
- */
 async function initAppInfo(ctx: SharedContext): Promise<string[]> {
   const lines: string[] = [];
   try {
@@ -121,8 +108,6 @@ async function initAppInfo(ctx: SharedContext): Promise<string[]> {
       };
     });
 
-    // 存到 ctx 供后续命令使用
-    // 统一去除 .html 后缀和开头的 /
     const normalize = (p: string) => p.replace(/^\//, '').replace(/\.html$/, '');
     ctx.appTabBar = config.tabBar || null;
     if (ctx.appTabBar?.list) {
@@ -132,25 +117,17 @@ async function initAppInfo(ctx: SharedContext): Promise<string[]> {
       }));
     }
 
-    // appPages 排除 tabBar 页面（tabBar 页面由 goto 内部自动调用 switchTab）
-    const tabPaths = new Set(
-      (ctx.appTabBar?.list || []).map((t: any) => t.pagePath)
-    );
+    const tabPaths = new Set((ctx.appTabBar?.list || []).map((t: any) => t.pagePath));
     ctx.appPages = (config.pages || [])
       .map((p: string) => normalize(p))
       .filter((p: string) => !tabPaths.has(p));
 
-    // LLM 友好的极简输出（使用已 normalize 的数据）
     lines.push(`[Pages] ${ctx.appPages.join(', ')}`);
-
     if (ctx.appTabBar?.list?.length) {
       const tabs = ctx.appTabBar.list.map((t: any) => t.pagePath).join(', ');
       lines.push(`[TabBar] ${tabs}`);
     }
-
-    // 当前页面
-    const curPage = ctx.currentPage?.path || 'unknown';
-    lines.push(`[Current] ${curPage}`);
+    lines.push(`[Current] ${ctx.currentPage?.path || 'unknown'}`);
   } catch (e: any) {
     lines.push(`[Init] 获取路由信息失败: ${e.message}`);
   }
@@ -173,170 +150,245 @@ async function connectByWsEndpoint(wsEndpoint: string, timeoutMs: number): Promi
   throw lastError || new Error(`连接超时: ${wsEndpoint}`);
 }
 
-export const connectDevtools: CommandDef = defineCommand({
-  name: 'open',
-  description: '连接到微信开发者工具（支持多种策略）',
-  category: '连接管理',
-  args: [
-    { name: 'project', type: 'string', description: '小程序项目绝对路径', alias: 'p' },
-    { name: 'strategy', type: 'string', default: 'auto', description: '连接策略: auto|launch|connect|wsEndpoint|browserUrl|discover', alias: 's' },
-    { name: 'ws', type: 'string', description: 'WebSocket 端点 (ws://...)' },
-    { name: 'cliPath', type: 'string', description: '微信开发者工具 CLI 路径' },
-    { name: 'autoPort', type: 'number', description: '自动化监听端口' },
-    { name: 'browserUrl', type: 'string', description: 'HTTP 调试 URL' },
-    { name: 'timeout', type: 'number', default: 45000, description: '连接超时(ms)' },
-    { name: 'verbose', type: 'boolean', default: false, description: '显示详细日志', alias: 'v' },
-  ],
-  handler: async (args, ctx) => {
-    const startTime = Date.now();
-    const lines: string[] = [];
+function getTimeout(args: Record<string, any>): number {
+  return args.timeout || 45000;
+}
 
-    const strategy = args.strategy || 'auto';
-    lines.push(out.info(`连接策略: ${strategy}`));
+function getIdeHttpPort(args: Record<string, any>, ctx: SharedContext): number | null {
+  const port = args.port ?? ctx.ideHttpPort;
+  return port === undefined ? null : port;
+}
 
-    try {
-      let mp: any;
+function getAutomatorPort(args: Record<string, any>, ctx: SharedContext): number {
+  return args.autoPort || ctx.automatorPort || 9420;
+}
 
-      if (args.ws) {
-        // 直接 WebSocket 连接
-        lines.push(out.dim(`连接到 ${args.ws}...`));
-        mp = await automator.connect({ wsEndpoint: args.ws });
-      } else if (args.browserUrl) {
-        lines.push(out.dim(`连接到 ${args.browserUrl}...`));
-        mp = await automator.connect({ wsEndpoint: args.browserUrl } as any);
-      } else if (args.project) {
-        // 校验并转为绝对路径
-        const projectPath = validateProjectPath(args.project);
-        const autoPort = args.autoPort || 9420;
+async function openProject(args: Record<string, any>, ctx: SharedContext): Promise<string[]> {
+  if (ctx.projectPath) {
+    throw new Error('当前 session 已绑定项目。请先执行 close，或使用新的 --session');
+  }
 
-        if (process.platform === 'win32') {
-          const cliPath = args.cliPath || ensureCliPath(ctx);
-          const wsEndpoint = `ws://127.0.0.1:${autoPort}`;
+  const projectPath = validateProjectPath(args.project);
+  const cliPath = args.cliPath || ctx.cliPath || ensureCliPath(ctx);
+  const timeout = getTimeout(args);
+  const ideHttpPort = getIdeHttpPort(args, ctx);
+  const cliArgs = ['open', '--project', projectPath];
+  if (ideHttpPort) {
+    cliArgs.push('--port', String(ideHttpPort));
+  }
 
-          lines.push(out.dim(`打开项目: ${projectPath}...`));
-          execCli(cliPath, ['open', '--project', projectPath], { timeout: args.timeout });
+  execCli(cliPath, cliArgs, { timeout });
 
-          lines.push(out.dim(`启用自动化端口: ${autoPort}...`));
-          execCli(cliPath, ['auto', '--project', projectPath, '--auto-port', String(autoPort)], { timeout: args.timeout });
+  ctx.cliPath = cliPath;
+  ctx.projectPath = projectPath;
+  ctx.ideHttpPort = ideHttpPort;
+  ctx.defaultProject = projectPath;
+  ctx.lastConnectionParams = { project: projectPath, port: ideHttpPort };
 
-          lines.push(out.dim(`连接到 ${wsEndpoint}...`));
-          mp = await connectByWsEndpoint(wsEndpoint, args.timeout || 45000);
-        } else {
-          const launchOpts: any = { projectPath };
-          if (args.cliPath) launchOpts.cliPath = args.cliPath;
-          if (args.autoPort) launchOpts.port = args.autoPort;
-          lines.push(out.dim(`启动项目: ${projectPath}...`));
-          mp = await automator.launch(launchOpts);
-        }
-      } else {
-        throw new Error('请指定 --project 或 --ws 或 --browserUrl');
-      }
+  const lines: string[] = [
+    out.success('项目已打开'),
+    `  项目: ${projectPath}`,
+  ];
+  if (ideHttpPort) {
+    lines.push(`  IDE HTTP 端口: ${ideHttpPort}`);
+  }
+  return lines;
+}
 
-      ctx.miniProgram = mp;
-      ctx.currentPage = await mp.currentPage();
-      ctx.lastConnectionParams = args;
+async function launchAutomation(args: Record<string, any>, ctx: SharedContext): Promise<string[]> {
+  const lines: string[] = [];
 
-      // 记住项目路径，供自动重连使用
-      if (args.project) {
-        ctx.defaultProject = args.project;
-      }
-
-      const elapsed = Date.now() - startTime;
-      lines.push(out.success(`连接成功 (${elapsed}ms)`));
-      lines.push(`  页面: ${ctx.currentPage?.path || 'unknown'}`);
-
-      // 自动启动监听
-      const monitorLogs = await setupAutoMonitoring(ctx);
-      for (const log of monitorLogs) {
-        lines.push(out.dim(`  ${log}`));
-      }
-
-      // 获取小程序路由信息
-      const initLogs = await initAppInfo(ctx);
-      for (const log of initLogs) {
-        lines.push(`  ${log}`);
-      }
-    } catch (e: any) {
-      lines.push(out.error(`连接失败: ${e.message}`));
-      if (args.verbose && e.stack) {
-        lines.push(out.dim(e.stack));
-      }
+  if (!ctx.projectPath) {
+    if (!args.project) {
+      throw new Error('当前 session 尚未打开项目。请先执行 open，或在 launch 中传入 --project');
     }
+    lines.push(...await openProject(args, ctx));
+  }
 
-    return lines.join('\n');
-  },
-});
+  if (!ctx.projectPath) {
+    throw new Error('当前 session 未绑定项目');
+  }
 
-export const reconnectDevtools: CommandDef = defineCommand({
-  name: 'reconnect',
-  description: '重新连接到微信开发者工具（复用上次连接参数）',
-  category: '连接管理',
-  args: [
-    { name: 'project', type: 'string', description: '覆盖项目路径', alias: 'p' },
-    { name: 'ws', type: 'string', description: '覆盖 WebSocket 端点' },
-  ],
-  handler: async (args, ctx) => {
-    if (!ctx.lastConnectionParams && !args.project && !args.ws) {
-      return out.error('没有上次的连接参数，请使用 open');
-    }
+  if (ctx.miniProgram) {
+    return [...lines, out.warn('当前 session 已连接 automator')];
+  }
 
-    // 先断开
-    if (ctx.miniProgram) {
-      try { await ctx.miniProgram.disconnect(); } catch {}
-      ctx.reset();
-    }
+  const timeout = getTimeout(args);
+  const cliPath = args.cliPath || ctx.cliPath || ensureCliPath(ctx);
+  const automatorPort = getAutomatorPort(args, ctx);
+  const wsEndpoint = `ws://127.0.0.1:${automatorPort}`;
+  const cliArgs = ['auto', '--project', ctx.projectPath, '--auto-port', String(automatorPort)];
 
-    // 合并参数
-    const mergedArgs = { ...ctx.lastConnectionParams, ...args };
-    return connectDevtools.handler(mergedArgs, ctx);
-  },
-});
+  if (args.trustProject) cliArgs.push('--trust-project');
+  if (args.ticket) cliArgs.push('--ticket', String(args.ticket));
+  if (args.testTicket) cliArgs.push('--test-ticket', String(args.testTicket));
 
-export const disconnectDevtools: CommandDef = defineCommand({
-  name: 'close',
-  description: '断开与微信开发者工具的连接',
-  category: '连接管理',
-  args: [],
-  handler: async (_args, ctx) => {
-    if (!ctx.miniProgram) {
-      return out.warn('当前未连接');
-    }
+  execCli(cliPath, cliArgs, { timeout });
 
+  const mp = await connectByWsEndpoint(wsEndpoint, timeout);
+  ctx.miniProgram = mp;
+  ctx.currentPage = await mp.currentPage();
+  ctx.cliPath = cliPath;
+  ctx.automatorPort = automatorPort;
+  ctx.defaultProject = ctx.projectPath;
+  ctx.lastConnectionParams = {
+    project: ctx.projectPath,
+    port: ctx.ideHttpPort,
+    autoPort: automatorPort,
+  };
+
+  lines.push(out.success('automator 已启动并连接成功'));
+  lines.push(`  页面: ${ctx.currentPage?.path || 'unknown'}`);
+  lines.push(`  automator 端口: ${automatorPort}`);
+
+  const monitorLogs = await setupAutoMonitoring(ctx);
+  for (const log of monitorLogs) {
+    lines.push(out.dim(`  ${log}`));
+  }
+
+  const initLogs = await initAppInfo(ctx);
+  for (const log of initLogs) {
+    lines.push(`  ${log}`);
+  }
+
+  return lines;
+}
+
+async function closeSession(ctx: SharedContext): Promise<string[]> {
+  if (!ctx.projectPath && !ctx.miniProgram) {
+    return [out.warn('当前 session 不存在可关闭的项目')];
+  }
+
+  const lines: string[] = [];
+  const projectPath = ctx.projectPath;
+  const cliPath = ctx.cliPath;
+  const ideHttpPort = ctx.ideHttpPort;
+
+  if (ctx.miniProgram) {
     try {
       await ctx.miniProgram.disconnect();
+      lines.push(out.dim('  automator 连接已断开'));
     } catch (e: any) {
-      // 忽略断开时的错误
+      lines.push(out.warn(`断开 automator 连接失败，已继续清理: ${e.message}`));
     }
+  }
 
-    ctx.reset();
-    return out.success('已断开连接');
-  },
-});
+  if (projectPath) {
+    try {
+      const resolvedCli = cliPath || ensureCliPath(ctx);
+      const cliArgs = ['close', '--project', projectPath];
+      if (ideHttpPort) {
+        cliArgs.push('--port', String(ideHttpPort));
+      }
+      execCli(resolvedCli, cliArgs, { timeout: 30000 });
+      lines.push(out.dim(`  项目窗口已关闭: ${projectPath}`));
+    } catch (e: any) {
+      lines.push(out.warn(`关闭项目窗口失败，已继续清理 session: ${e.message}`));
+    }
+  }
 
-export const getConnectionStatus: CommandDef = defineCommand({
-  name: 'status',
-  description: '获取当前连接状态',
+  ctx.reset();
+  lines.unshift(out.success('session 已关闭并销毁'));
+  return lines;
+}
+
+const openDevtools: CommandDef = defineCommand({
+  name: 'open',
+  description: '打开 IDE 项目并创建 session',
+  longDescription: '只负责 IDE / 项目窗口生命周期，不会自动启动 automator。需要自动化操作时，再执行 launch。',
   category: '连接管理',
   args: [
-    { name: 'refresh', type: 'boolean', default: true, description: '刷新健康检查状态' },
+    { name: 'project', type: 'string', required: true, description: '小程序项目绝对路径', alias: 'p' },
+    { name: 'port', type: 'number', description: 'IDE HTTP 服务端口' },
+    { name: 'cliPath', type: 'string', description: '微信开发者工具 CLI 路径' },
+    { name: 'timeout', type: 'number', default: 45000, description: '命令超时(ms)' },
+  ],
+  examples: [
+    { cmd: 'open ./my-miniprogram', desc: '打开项目并创建默认 session' },
+    { cmd: 'open ./my-miniprogram --port 41917 --session agent-a', desc: '指定 IDE HTTP 端口和 session ID' },
+  ],
+  handler: async (args, ctx) => (await openProject(args, ctx)).join('\n'),
+});
+
+const launchDevtools: CommandDef = defineCommand({
+  name: 'launch',
+  description: '启动 automator 并连接当前 session',
+  longDescription: '负责 automator 生命周期。默认复用当前 session 已打开的项目；如果当前 session 尚未 open，可以在 launch 中直接传入 --project。',
+  category: '连接管理',
+  args: [
+    { name: 'project', type: 'string', description: '小程序项目绝对路径（当前 session 未 open 时必填）', alias: 'p' },
+    { name: 'port', type: 'number', description: 'IDE HTTP 服务端口（仅在 launch 自动 open 时使用）' },
+    { name: 'autoPort', type: 'number', description: 'automator WebSocket 端口' },
+    { name: 'cliPath', type: 'string', description: '微信开发者工具 CLI 路径' },
+    { name: 'trustProject', type: 'boolean', default: false, description: '传递给 CLI auto 的 --trust-project' },
+    { name: 'ticket', type: 'string', description: '传递给 CLI auto 的 --ticket' },
+    { name: 'testTicket', type: 'string', description: '传递给 CLI auto 的 --test-ticket' },
+    { name: 'timeout', type: 'number', default: 45000, description: '命令超时(ms)' },
+  ],
+  examples: [
+    { cmd: 'launch --auto-port 9420', desc: '为当前 session 启动 automator 并连接到 9420' },
+    { cmd: 'launch --project ./my-miniprogram --port 41917 --auto-port 9420', desc: '未 open 时一步完成打开项目并启动 automator' },
+  ],
+  handler: async (args, ctx) => (await launchAutomation(args, ctx)).join('\n'),
+});
+
+const closeDevtools: CommandDef = defineCommand({
+  name: 'close',
+  description: '关闭项目窗口并销毁当前 session',
+  longDescription: '关闭 IDE 项目窗口，断开 automator，并删除当前 session。使用 --all 时会依次清理所有 session。',
+  category: '连接管理',
+  args: [
+    { name: 'all', type: 'boolean', default: false, description: '关闭并清理所有 session' },
+  ],
+  examples: [
+    { cmd: 'close', desc: '关闭当前 session 绑定的项目并销毁 session' },
+    { cmd: 'close --session agent-a', desc: '关闭指定 session' },
+    { cmd: 'close --all', desc: '关闭并清理所有 session' },
+  ],
+  handler: async (_args, ctx) => (await closeSession(ctx)).join('\n'),
+});
+
+const getConnectionStatus: CommandDef = defineCommand({
+  name: 'status',
+  description: '获取当前 session 状态',
+  longDescription: '显示当前 session 的状态、项目路径、IDE HTTP 端口和 automator 端口。状态只会是 opened、connected、error 或 idle。',
+  category: '连接管理',
+  args: [
+    { name: 'refresh', type: 'boolean', default: true, description: 'connected 时刷新当前页面信息' },
+  ],
+  examples: [
+    { cmd: 'status', desc: '查看当前默认 session 的状态' },
+    { cmd: 'status --session agent-a', desc: '查看指定 session 的状态' },
   ],
   handler: async (args, ctx) => {
     const lines: string[] = [];
-    const connected = !!ctx.miniProgram;
+    const rawState = (ctx as any).status || (ctx.miniProgram ? 'connected' : (ctx.projectPath ? 'opened' : 'idle'));
 
-    lines.push(`连接状态: ${connected ? out.success('已连接') : out.error('未连接')}`);
-
-    if (connected) {
+    if (rawState === 'connected' && ctx.miniProgram && args.refresh) {
       try {
-        if (args.refresh) {
-          ctx.currentPage = await ctx.miniProgram!.currentPage();
-        }
-        lines.push(`  当前页面: ${ctx.currentPage?.path || 'unknown'}`);
-        lines.push(`  Console 监听: ${ctx.consoleListening ? '开启' : '关闭'} (${ctx.consoleMessages.length} 条消息)`);
-        lines.push(`  Network 监听: ${ctx.networkListening ? '开启' : '关闭'} (${ctx.networkRequests.length} 条请求)`);
+        ctx.currentPage = await ctx.miniProgram.currentPage();
       } catch (e: any) {
-        lines.push(out.warn(`连接可能已断开: ${e.message}`));
+        lines.push(out.warn(`刷新页面信息失败: ${e.message}`));
       }
+    }
+
+    lines.push(`状态: ${
+      rawState === 'connected' ? out.success('connected') :
+      rawState === 'error' ? out.error('error') :
+      rawState === 'opened' ? out.warn('opened') :
+      out.dim('idle')
+    }`);
+
+    if (ctx.projectPath) lines.push(`  项目: ${ctx.projectPath}`);
+    if (ctx.ideHttpPort) lines.push(`  IDE HTTP 端口: ${ctx.ideHttpPort}`);
+    if (ctx.automatorPort) lines.push(`  automator 端口: ${ctx.automatorPort}`);
+    if (ctx.currentPage?.path) lines.push(`  当前页面: ${ctx.currentPage.path}`);
+    if (rawState === 'connected') {
+      lines.push(`  Console 监听: ${ctx.consoleListening ? '开启' : '关闭'} (${ctx.consoleMessages.length} 条消息)`);
+      lines.push(`  Network 监听: ${ctx.networkListening ? '开启' : '关闭'} (${ctx.networkRequests.length} 条请求)`);
+    }
+    if (rawState === 'error') {
+      lines.push(out.warn('  当前 session 处于 error 状态，请执行 close 后重新 open/launch'));
     }
 
     return lines.join('\n');
@@ -344,8 +396,8 @@ export const getConnectionStatus: CommandDef = defineCommand({
 });
 
 export const connectionCommands: CommandDef[] = [
-  connectDevtools,
-  reconnectDevtools,
-  disconnectDevtools,
+  openDevtools,
+  launchDevtools,
+  closeDevtools,
   getConnectionStatus,
 ];

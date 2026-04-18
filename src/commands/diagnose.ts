@@ -135,8 +135,12 @@ export const doctorCommand: CommandDef = defineCommand({
             if (sessions.length > 0) {
               lines.push(`  Session: ${sessions.length} 个`);
               for (const s of sessions) {
-                const icon = s.status === 'connected' ? '●' : '○';
-                lines.push(`    ${icon} ${s.id}  ${s.status}  page=${s.currentPage || '-'}`);
+                const icon = s.status === 'connected' ? '●' : s.status === 'error' ? '✖' : '○';
+                lines.push(`    ${icon} ${s.id}  ${s.status}  http=${s.ideHttpPort || '-'}  automator=${s.automatorPort || '-'}  page=${s.currentPage || '-'}`);
+              }
+              const errorSessions = sessions.filter((s: any) => s.status === 'error');
+              if (errorSessions.length > 0) {
+                warn(`存在 ${errorSessions.length} 个 error session，建议执行 close --session <id> 清理`);
               }
             } else {
               lines.push(out.dim('  无活跃 session'));

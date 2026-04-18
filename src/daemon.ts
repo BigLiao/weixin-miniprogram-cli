@@ -20,22 +20,23 @@ import { logger } from './utils/logger.js';
 
 import { SOCKET_PATH, PID_FILE } from './constants.js';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 分钟空闲自动退出
+const EMPTY_SESSION_IDLE_TIMEOUT_MS = 15_000; // 没有 session 时快速退出
 const COMMAND_TIMEOUT_MS = 120_000;      // 单条命令最长 2 分钟
 const SHUTDOWN_TIMEOUT_MS = 10_000;      // 优雅关闭最长 10 秒
 const MAX_BUFFER_SIZE = 1024 * 1024;     // 客户端 buffer 最大 1MB
 const HEALTH_CHECK_INTERVAL_MS = 15_000; // 每 15 秒检测一次 IDE 连接健康
 
 /** 不需要 resolve session 的命令（session 管理命令通过闭包捕获 sessionMgr） */
-const SESSION_META_COMMANDS = new Set(['sessions', 'switch-session']);
+const SESSION_META_COMMANDS = new Set(['session list', 'session use', 'sessions', 'switch-session']);
 
 /** 命令执行后自动检查并附加 exception 输出的命令 */
 const EXCEPTION_AWARE_COMMANDS = new Set([
-  'open', 'goto', 'go-back', 'relaunch', 'scroll', 'snapshot',
+  'launch', 'goto', 'go-back', 'relaunch', 'scroll', 'snapshot',
 ]);
 
 /** 需要等待异步 exception 到达的命令（页面导航类） */
 const EXCEPTION_WAIT_COMMANDS = new Set([
-  'open', 'goto', 'go-back', 'relaunch',
+  'goto', 'go-back', 'relaunch',
 ]);
 const EXCEPTION_WAIT_MS = 500;
 
@@ -74,10 +75,11 @@ let isShuttingDown = false;
 
 function resetIdleTimer(): void {
   if (idleTimer) clearTimeout(idleTimer);
+  const timeout = sessionMgr.getAll().length > 0 ? IDLE_TIMEOUT_MS : EMPTY_SESSION_IDLE_TIMEOUT_MS;
   idleTimer = setTimeout(() => {
     logger.info('空闲超时，自动关闭');
     gracefulShutdown();
-  }, IDLE_TIMEOUT_MS);
+  }, timeout);
 }
 
 /**
@@ -106,23 +108,31 @@ interface DaemonResponse {
  * 为请求解析 session 上下文。
  * 返回 Session 实例，或 null（表示该命令不需要 session）。
  */
-function resolveSessionForRequest(command: string, reqSession?: string): Session | null {
+function resolveSessionForRequest(command: string, args: Record<string, any>, reqSession?: string): Session | null {
   // session 管理命令通过闭包访问 sessionMgr，不需要 ctx
   if (SESSION_META_COMMANDS.has(command)) {
     return null;
   }
 
   if (command === 'open') {
+    const session = sessionMgr.create(reqSession || undefined);
+    sessionMgr.setActive(session.id);
+    applyGlobalConfig(session);
+    return session;
+  }
+
+  if (command === 'launch') {
     let session: Session;
+    let created = false;
     if (reqSession && sessionMgr.get(reqSession)) {
-      // 显式指定且已存在 → 复用（reconnect 场景）
       session = sessionMgr.get(reqSession)!;
-    } else {
-      // 创建新 session
+    } else if (args.project) {
       session = sessionMgr.create(reqSession || undefined);
+      created = true;
+    } else {
+      session = sessionMgr.resolve(reqSession);
     }
-    // 首个 session 或无活跃 session 时自动设为活跃
-    if (!sessionMgr.activeId) {
+    if (created) {
       sessionMgr.setActive(session.id);
     }
     applyGlobalConfig(session);
@@ -182,7 +192,7 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
       let ctx: Session | null = null;
 
       try {
-        ctx = resolveSessionForRequest(command, req.session);
+        ctx = resolveSessionForRequest(command, finalArgs, req.session);
 
         if (ctx) ctx.touch();
 
@@ -200,15 +210,25 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
         clearTimeout(timer);
         logger.debug(`done: ${command}${sessionLabel}`, `(${Date.now() - startTime}ms)`);
 
-        // connect 成功后标记 connected，并启动健康检测
-        if (command === 'open' && ctx?.miniProgram) {
-          ctx.status = 'connected';
-          startHealthCheck();
+        if (command === 'open' && ctx?.projectPath) {
+          ctx.markOpened({
+            projectPath: ctx.projectPath,
+            ideHttpPort: ctx.ideHttpPort,
+            automatorPort: ctx.automatorPort,
+            cliPath: ctx.cliPath,
+          });
+          resetIdleTimer();
         }
 
-        // disconnect 后标记 disconnected（session 保留在 map 中）
+        if (command === 'launch' && ctx?.miniProgram) {
+          ctx.markConnected();
+          startHealthCheck();
+          resetIdleTimer();
+        }
+
         if (command === 'close' && ctx) {
-          ctx.status = 'disconnected';
+          sessionMgr.remove(ctx.id);
+          resetIdleTimer();
         }
 
         // 检查命令执行期间新增的 exception，附加到输出中
@@ -237,10 +257,12 @@ async function handleRequest(req: DaemonRequest): Promise<DaemonResponse> {
         clearTimeout(timer);
         logger.error(`fail: ${command}`, `(${Date.now() - startTime}ms)`, e.message);
 
-        // 检测连接断开错误，标记 dead
-        if (ctx && ctx.status === 'connected' && isConnectionError(e)) {
-          ctx.markDead();
-          logger.warn(`Session ${ctx.id} 已标记为 dead`);
+        if (ctx && (command === 'open' || command === 'launch') && !ctx.projectPath) {
+          sessionMgr.remove(ctx.id);
+          resetIdleTimer();
+        } else if (ctx && isConnectionError(e)) {
+          ctx.markError();
+          logger.warn(`Session ${ctx.id} 已标记为 error`);
         }
 
         resolve({ ok: false, error: e.message });
@@ -267,8 +289,8 @@ function isConnectionError(e: any): boolean {
 let healthCheckTimer: NodeJS.Timeout | null = null;
 
 /**
- * 定期检测 IDE 连接是否存活。
- * 当所有已连接的 session 都断开（IDE 关闭），自动关闭 daemon。
+ * 定期检测 automator 连接是否存活。
+ * 当 connected session 失活时，标记为 error。
  */
 function startHealthCheck(): void {
   if (healthCheckTimer) return;
@@ -287,16 +309,9 @@ function startHealthCheck(): void {
           new Promise((_, reject) => setTimeout(() => reject(new Error('health check timeout')), 5000)),
         ]);
       } catch {
-        logger.warn(`Session ${session.id} IDE 连接已断开，标记为 dead`);
-        session.markDead();
+        logger.warn(`Session ${session.id} automator 连接已断开，标记为 error`);
+        session.markError();
       }
-    }
-
-    // 如果曾经有过连接，但现在所有 session 都不是 connected 状态，自动退出
-    const hasAnyConnected = sessions.some(s => s.status === 'connected');
-    if (!hasAnyConnected) {
-      logger.info('所有 IDE 连接已断开，自动关闭 daemon');
-      gracefulShutdown();
     }
   }, HEALTH_CHECK_INTERVAL_MS);
   healthCheckTimer.unref(); // 不阻止进程退出

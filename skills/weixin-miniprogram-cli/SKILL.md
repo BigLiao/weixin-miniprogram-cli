@@ -21,6 +21,7 @@ wx-mp-cli help --detail
 
 ```bash
 wx-mp-cli open /path/to/miniprogram
+wx-mp-cli launch --auto-port 9420
 wx-mp-cli snapshot
 wx-mp-cli click ".submit-btn"
 wx-mp-cli wait --selector ".success"
@@ -31,6 +32,8 @@ wx-mp-cli close
 
 ## Operational Rules
 
+- `open` 只负责 IDE / 项目窗口生命周期；需要自动化操作前，再执行 `launch`。
+- `open --port` 是 IDE HTTP 端口，`launch --auto-port` 是 automator WebSocket 端口，不要混用。
 - 交互前先 `snapshot`，获取页面元素树和 CSS selector。
 - 页面跳转/返回/重启后，重新 `snapshot`，不复用旧 selector。
 - 参数不确定时 `help <command>`，不要 `help --detail`。
@@ -116,8 +119,8 @@ wx-mp-cli eval --script "wx.getSystemInfoSync()"
 ### 多 Session 管理
 
 ```bash
-wx-mp-cli sessions --probe
-wx-mp-cli switch-session --id s2
+wx-mp-cli session list --probe
+wx-mp-cli session use --id s2
 ```
 
 ### 环境诊断与恢复
@@ -125,7 +128,9 @@ wx-mp-cli switch-session --id s2
 ```bash
 wx-mp-cli doctor
 wx-mp-cli status
-wx-mp-cli reconnect
+wx-mp-cli close --session s2
+wx-mp-cli open /path/to/miniprogram --session s2
+wx-mp-cli launch --session s2 --auto-port 9420
 ```
 
 ## Failure Handling
@@ -134,5 +139,5 @@ wx-mp-cli reconnect
 - 登录问题：先 `islogin` 或 `login --qr-size default`。
 - 元素找不到：重新 `snapshot`，确认 selector 有效，使用唯一 selector。
 - 网络请求为空：尝试 `relaunch` 重新加载页面。
-- daemon 挂掉：`daemon stop` 后重新 `open`。
+- daemon 挂掉：`daemon stop` 后重新 `open`，再执行 `launch`。
 - 长流程中断：保留截图或断言结果，向用户说明失败步骤。
