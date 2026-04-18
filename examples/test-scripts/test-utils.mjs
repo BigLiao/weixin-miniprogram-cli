@@ -78,9 +78,17 @@ export function summary() {
  * 清理：断开连接
  */
 export async function cleanup() {
-  if (ctx.miniProgram) {
+  if (ctx.miniProgram || ctx.projectPath) {
+    const closeCmd = registry.get('close');
+    if (closeCmd) {
+      try {
+        await closeCmd.handler({}, ctx);
+      } catch {}
+    }
+  }
+  if (ctx.miniProgram || ctx.projectPath) {
     try {
-      await ctx.miniProgram.disconnect();
+      await ctx.miniProgram?.disconnect();
     } catch {}
     ctx.reset();
   }

@@ -46,13 +46,19 @@ export class SharedContext {
   cliPath: string | null = null;
   /** 默认项目路径（来自 connect 或 config 设置） */
   defaultProject: string | null = null;
+  /** 当前 session 绑定的项目路径 */
+  projectPath: string | null = null;
+  /** IDE HTTP 服务端口（open --port） */
+  ideHttpPort: number | null = null;
+  /** automator websocket 端口（launch --auto-port） */
+  automatorPort: number | null = null;
   private consoleMsgId: number = 0;
   private networkReqId: number = 0;
 
   /** 检查是否已连接 */
   ensureConnected(): void {
     if (!this.miniProgram) {
-      throw new Error('未连接到微信开发者工具。请先执行 connect');
+      throw new Error('未连接到微信开发者工具。请先执行 launch');
     }
   }
 
@@ -113,8 +119,8 @@ export class SharedContext {
     }
   }
 
-  /** 重置所有状态 */
-  reset(): void {
+  /** 重置自动化连接状态，但保留项目元数据 */
+  resetAutomationState(): void {
     this.miniProgram = null;
     this.currentPage = null;
     this.consoleMessages = [];
@@ -126,11 +132,20 @@ export class SharedContext {
     this.consoleMsgId = 0;
     this.networkReqId = 0;
   }
+
+  /** 重置所有状态 */
+  reset(): void {
+    this.resetAutomationState();
+    this.lastConnectionParams = null;
+    this.projectPath = null;
+    this.ideHttpPort = null;
+    this.automatorPort = null;
+  }
 }
 
 // ==================== Session（多 session 架构）====================
 
-export type SessionStatus = 'connected' | 'disconnected' | 'dead';
+export type SessionStatus = 'opened' | 'connected' | 'error';
 
 /**
  * Session 继承 SharedContext，对命令层完全透明。
@@ -138,7 +153,7 @@ export type SessionStatus = 'connected' | 'disconnected' | 'dead';
  */
 export class Session extends SharedContext {
   readonly id: string;
-  status: SessionStatus = 'disconnected';
+  status: SessionStatus = 'opened';
   readonly createdAt: number = Date.now();
   lastActiveAt: number = Date.now();
 
@@ -152,17 +167,36 @@ export class Session extends SharedContext {
     this.lastActiveAt = Date.now();
   }
 
-  /** 重置状态并标记为 disconnected */
-  override reset(): void {
-    super.reset();
-    this.status = 'disconnected';
+  /** 标记为 opened（项目已打开，但还未进入 automator 运行态） */
+  markOpened(meta?: {
+    projectPath?: string;
+    ideHttpPort?: number | null;
+    automatorPort?: number | null;
+    cliPath?: string | null;
+  }): void {
+    this.resetAutomationState();
+    if (meta?.projectPath !== undefined) this.projectPath = meta.projectPath;
+    if (meta?.ideHttpPort !== undefined) this.ideHttpPort = meta.ideHttpPort;
+    if (meta?.automatorPort !== undefined) this.automatorPort = meta.automatorPort;
+    if (meta?.cliPath !== undefined) this.cliPath = meta.cliPath;
+    this.status = 'opened';
   }
 
-  /** 标记为 dead（连接已不可恢复） */
-  markDead(): void {
-    this.status = 'dead';
-    this.miniProgram = null;
-    this.currentPage = null;
+  /** 标记为 connected */
+  markConnected(): void {
+    this.status = 'connected';
+  }
+
+  /** 重置状态并清空 session */
+  override reset(): void {
+    super.reset();
+    this.status = 'opened';
+  }
+
+  /** 标记为 error（连接异常，需要 close 后重来） */
+  markError(): void {
+    this.resetAutomationState();
+    this.status = 'error';
   }
 
   /** 返回 session 概要信息 */
@@ -170,6 +204,9 @@ export class Session extends SharedContext {
     id: string;
     status: SessionStatus;
     currentPage: string | null;
+    projectPath: string | null;
+    ideHttpPort: number | null;
+    automatorPort: number | null;
     idleMs: number;
     createdAt: number;
   } {
@@ -177,6 +214,9 @@ export class Session extends SharedContext {
       id: this.id,
       status: this.status,
       currentPage: this.currentPage?.path || null,
+      projectPath: this.projectPath,
+      ideHttpPort: this.ideHttpPort,
+      automatorPort: this.automatorPort,
       idleMs: Date.now() - this.lastActiveAt,
       createdAt: this.createdAt,
     };

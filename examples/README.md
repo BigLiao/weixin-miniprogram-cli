@@ -26,7 +26,7 @@ CLI 集成测试脚本，覆盖全部命令。
 
 | 测试文件 | 覆盖命令 | 数量 |
 |---------|---------|------|
-| test-connection.mjs | open/reconnect/close/status | 4 |
+| test-connection.mjs | open/launch/close/status | 4 |
 | test-page.mjs | page/query/wait/snapshot | 4 |
 | test-input.mjs | click/fill/value | 3 |
 | test-navigate.mjs | goto/go-back/relaunch | 3 |

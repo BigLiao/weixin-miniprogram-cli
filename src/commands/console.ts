@@ -17,7 +17,7 @@ export const listConsoleMessages: CommandDef = defineCommand({
   ],
   handler: async (args, ctx) => {
     if (!ctx.consoleListening) {
-      return out.warn('Console 监听未启动。请先连接开发者工具 (open 会自动启动)');
+      return out.warn('Console 监听未启动。请先执行 launch 启动 automator');
     }
 
     let messages = [...ctx.consoleMessages];

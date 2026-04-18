@@ -4,7 +4,7 @@
  * wx-mp-cli - 微信开发者工具交互式 CLI 控制器
  *
  * 支持三种模式：
- * 1. wx-mp-cli connect <path>      — 启动 daemon + 连接（daemon 模式）
+ * 1. wx-mp-cli launch <path>       — 启动 daemon，打开项目并连接（daemon 模式）
  * 2. wx-mp-cli <command> [args]    — 通过 daemon 或本地执行
  * 3. wx-mp-cli --repl              — 传统 REPL 模式（向后兼容）
  */
@@ -333,15 +333,15 @@ function resolveCommand(input: string, options?: { silent?: boolean }): Resolved
 /**
  * 通过 daemon 执行命令
  */
-async function executeDaemonCommand(input: string): Promise<void> {
+async function executeDaemonCommand(input: string): Promise<boolean> {
   let resolved: ResolvedCommand | null;
   try {
     resolved = resolveCommand(input);
   } catch (e: any) {
     console.log(out.error(e.message));
-    return;
+    return false;
   }
-  if (!resolved) return;
+  if (!resolved) return false;
 
   // daemon CWD 与用户终端不同，需在 client 端将 file 参数转为绝对路径
   if (resolved.args.file && typeof resolved.args.file === 'string') {
@@ -356,11 +356,14 @@ async function executeDaemonCommand(input: string): Promise<void> {
     logger.debug(`response: ok=${resp.ok}`, resp.ok ? '' : resp.error);
     if (resp.ok) {
       if (resp.output) console.log(resp.output);
+      return true;
     } else {
       console.log(out.error(resp.error || '命令执行失败'));
+      return false;
     }
   } catch (e: any) {
     console.log(out.error(e.message));
+    return false;
   }
 }
 
@@ -463,7 +466,7 @@ async function autoConnect(): Promise<void> {
   if (!project) return;
 
   console.log(out.dim(`  自动连接: ${project}...`));
-  const connectCmd = registry.get('open');
+  const connectCmd = registry.get('launch');
   if (!connectCmd) return;
 
   try {
@@ -471,18 +474,23 @@ async function autoConnect(): Promise<void> {
     console.log(result);
   } catch (e: any) {
     console.log(out.warn(`自动连接失败: ${e.message}`));
-    console.log(out.dim('  可手动执行 open --project /path'));
+    console.log(out.dim('  可手动执行 launch --project /path'));
   }
   console.log('');
 }
 
 async function autoDisconnect(): Promise<void> {
-  if (!ctx.miniProgram) return;
-  console.log(out.dim('  断开连接...'));
+  if (!ctx.miniProgram && !ctx.projectPath) return;
+  const closeCmd = registry.get('close');
+  if (!closeCmd) return;
+
+  console.log(out.dim('  关闭当前 session...'));
   try {
-    await ctx.miniProgram.disconnect();
-  } catch {}
-  ctx.reset();
+    const result = await closeCmd.handler({}, ctx);
+    if (result) console.log(result);
+  } catch {
+    ctx.reset();
+  }
 }
 
 function showBanner(): void {
@@ -593,9 +601,9 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
             if (status.sessions && status.sessions.length > 0) {
               console.log(`  Session 列表 (${status.sessions.length}):`);
               for (const s of status.sessions) {
-                const icon = s.status === 'connected' ? '●' : s.status === 'dead' ? '✖' : '○';
+                const icon = s.status === 'connected' ? '●' : s.status === 'error' ? '✖' : '○';
                 const active = s.id === status.activeSession ? ' ★' : '';
-                console.log(`    ${icon} ${s.id}${active}  ${s.status}  page=${s.currentPage || '-'}`);
+                console.log(`    ${icon} ${s.id}${active}  ${s.status}  http=${s.ideHttpPort || '-'}  automator=${s.automatorPort || '-'}  page=${s.currentPage || '-'}`);
               }
             } else {
               console.log('  没有活跃的 session');
@@ -604,7 +612,7 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
         } catch {}
       } else {
         console.log(out.warn('daemon 未运行'));
-        console.log(out.dim('  使用 wx-mp-cli open <project> 启动'));
+        console.log(out.dim('  使用 wx-mp-cli open <project> 或 launch <project> 启动'));
       }
       break;
     }
@@ -630,113 +638,84 @@ async function handleDaemonSubcommand(subcommand: string): Promise<void> {
 // ==================== 入口 ====================
 
 const argv = rawArgv;
+const input = argv.map(a => a.includes(' ') ? `"${a}"` : a).join(' ');
 
 logger.debug('入口分支判断', { first: argv[0], len: argv.length });
 
-if (argv[0] === 'open' && argv.length >= 2) {
-  // ======= wx-mp-cli open <project_path> [options...] =======
-  // 启动 daemon（如果没运行），然后发送 open 命令
-  const projectPath = argv[1];
-  const restArgs = argv.slice(2);
-
-  // 解析额外参数
-  const extraArgs: Record<string, any> = {};
-  for (let i = 0; i < restArgs.length; i++) {
-    const arg = restArgs[i];
-    if (arg.startsWith('--')) {
-      const key = arg.slice(2);
-      const next = restArgs[i + 1];
-      if (next && !next.startsWith('--')) {
-        extraArgs[key] = next;
-        i++;
-      } else {
-        extraArgs[key] = true;
-      }
-    }
-  }
-
+if (argv[0] === 'open' || argv[0] === 'launch' || argv[0] === 'close') {
   (async () => {
     try {
-      // 前置检查：路径校验
-      const absProjectPath = validateProjectPath(projectPath);
-
-      // 前置检查：登录状态（未登录则提示并退出，不自动唤起登录）
-      const { loggedIn, logs: loginLogs } = ensureLogin(ctx);
-      loginLogs.forEach(l => console.log(l));
-      if (!loggedIn) {
-        console.log(out.info('请先执行 wx-mp-cli login 进行登录'));
+      const resolved = resolveCommand(input, { silent: true });
+      if (!resolved) {
         process.exit(1);
       }
 
-      // 启动 daemon
-      logger.debug('检查 daemon 状态...');
-      const running = await isDaemonRunning();
-      if (!running) {
+      let exitCode = 0;
+
+      if ((resolved.cmd.name === 'open' || resolved.cmd.name === 'launch') && resolved.args.project) {
+        resolved.args.project = validateProjectPath(resolved.args.project);
+        const { loggedIn, logs: loginLogs } = ensureLogin(ctx);
+        loginLogs.forEach(l => console.log(l));
+        if (!loggedIn) {
+          console.log(out.info('请先执行 wx-mp-cli login 进行登录'));
+          process.exit(1);
+        }
+      }
+
+      let running = await isDaemonRunning();
+      if (!running && resolved.cmd.name !== 'close') {
         console.log(out.dim('  启动 daemon...'));
         const pid = await startDaemon();
         console.log(out.success(`daemon 已启动 (PID: ${pid})`));
-      } else {
+        running = true;
+      } else if (running) {
         const pid = getDaemonPid();
         console.log(out.dim(`  daemon 已在运行 (PID: ${pid})`));
       }
 
-      // 提取 --session 参数
-      const sessionId = extraArgs.session || process.env.WX_SESSION || undefined;
-      delete extraArgs.session;  // session 是 IPC 层面的
-
-      // 发送连接命令（使用绝对路径，避免 daemon 工作目录不同导致相对路径解析错误）
-      const connectArgs = { project: absProjectPath, ...extraArgs };
-      const resp = await sendCommand('open', connectArgs, undefined, sessionId);
-      if (resp.ok) {
-        if (resp.output) console.log(resp.output);
-      } else {
-        console.log(out.error(resp.error || '连接失败'));
-        process.exit(1);
+      if (!running && resolved.cmd.name === 'close') {
+        console.log(out.warn('daemon 未运行'));
+        process.exit(0);
       }
+
+      if (resolved.cmd.name === 'close' && resolved.args.all) {
+        const statusResp = await sendCommand('__status');
+        if (!statusResp.ok || !statusResp.output) {
+          console.log(out.error('无法读取 daemon 状态'));
+          process.exit(1);
+        }
+        const status = JSON.parse(statusResp.output);
+        for (const s of status.sessions || []) {
+          const resp = await sendCommand('close', {}, undefined, s.id);
+          if (resp.ok && resp.output) {
+            console.log(resp.output);
+          } else if (!resp.ok) {
+            console.log(out.error(resp.error || `关闭 session ${s.id} 失败`));
+          }
+        }
+      } else {
+        const ok = await executeDaemonCommand(input);
+        exitCode = ok ? 0 : 1;
+      }
+
+      try {
+        const statusResp = await sendCommand('__status');
+        if (statusResp.ok && statusResp.output) {
+          const status = JSON.parse(statusResp.output);
+          if ((status.sessions || []).length === 0) {
+            logger.debug('无活跃 session，停止 daemon');
+            await stopDaemon();
+            console.log(out.dim('  daemon 已停止'));
+          }
+        }
+      } catch {
+        // daemon 可能已自行退出
+      }
+
+      process.exit(exitCode);
     } catch (e: any) {
       console.error(out.error(e.message));
       process.exit(1);
-    }
-  })();
-
-} else if (argv[0] === 'close') {
-  // ======= wx-mp-cli close [--session <id>] =======
-  (async () => {
-    const running = await isDaemonRunning();
-    if (!running) {
-      console.log(out.warn('daemon 未运行'));
-      process.exit(0);
-    }
-
-    // 复用 resolveCommand 解析（提取 --session 等参数）
-    const input = argv.join(' ');
-    const resolved = resolveCommand(input, { silent: true });
-    const sessionId = resolved?.sessionId || process.env.WX_SESSION || undefined;
-    const cmdArgs = resolved?.args || {};
-
-    const resp = await sendCommand('close', cmdArgs, undefined, sessionId);
-    if (resp.ok) {
-      if (resp.output) console.log(resp.output);
-    } else {
-      console.log(out.error(resp.error || '断开失败'));
-    }
-
-    // 检查是否还有活跃 session，没有则停止 daemon
-    try {
-      const statusResp = await sendCommand('__status');
-      if (statusResp.ok && statusResp.output) {
-        const status = JSON.parse(statusResp.output);
-        const hasAlive = (status.sessions || []).some(
-          (s: any) => s.status === 'connected' || s.status === 'disconnected'
-        );
-        if (!hasAlive) {
-          logger.debug('无活跃 session，停止 daemon');
-          await stopDaemon();
-          console.log(out.dim('  daemon 已停止'));
-        }
-      }
-    } catch {
-      // 忽略状态查询失败
     }
   })();
 
