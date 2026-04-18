@@ -7,7 +7,10 @@
 ### Features
 
 - **IDE CLI 参数对齐**: `login` 补充 `--qr-size` / `--result-output`，`build-npm` 补充 `--compile-type`，`auto` 补充 `--auto-account`
-- **通用项目参数**: IDE 命令统一支持 `--appid` / `--ext-appid`，并保持 `--project` 优先级更高
+- **通用项目目标参数**: IDE 命令统一支持 `--project` / `--appid` / `--ext-appid`，并保持 `--project` 优先级更高
+- **连接生命周期拆分**: `open` 负责 IDE / 项目窗口生命周期，`launch` 负责 automator 生命周期，支持先打开项目再按需建立自动化连接
+- **session 默认激活优化**: 新创建 session 会自动成为当前活跃 session，减少多 session 场景下额外切换
+- **帮助与 Skill 文档对齐**: 补齐连接命令说明、session 行为和示例，降低从 help/skill 文档到实际命令行为之间的偏差
 
 ### Tests
 
@@ -16,10 +19,17 @@
 - **真实表单关键路径**: 新增登录表单 E2E，用例覆盖手机号输入逻辑、协议勾选、提交按钮点击以及 `/login/getSendMessage` 网络请求校验
 - **E2E 工件归档**: 新增命令日志、截图、快照输出和串行执行配置，降低微信开发者工具环境下的并发干扰
 
+### Refactoring
+
+- **多阶段连接状态重构**: `opened` / `connected` / `error` 状态更加清晰，daemon、session 管理和状态输出围绕新的连接阶段重新组织
+- **连接参数持久化调整**: 项目路径、IDE 端口、automator 端口与页面元数据在 session 中分层保存，便于状态恢复和诊断展示
+
 ### Bug Fixes
 
 - **cache 参数兼容**: `cache` 改为走官方 CLI 的 `--clean`，并兼容旧的 `--type` 输入转发
 - **WSL 路径转发**: 补充 `--result-output` 的 Windows/WSL 路径归一化
+- **CLI 目标解析细节**: 补充项目目标优先级、路径兼容和帮助文案收口，减少 IDE 命令的歧义输入
+- **E2E smoke 稳定性**: 登录页导航改用更稳定的 `relaunch`，避免真实开发者工具环境下的偶发 `goto timeout`
 
 ## [1.1.1] - 2026-04-04
 
