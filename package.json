@@ -22,6 +22,8 @@
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
+    "test:e2e:watch": "npm run build && vitest --config vitest.e2e.config.ts",
     "start": "node build/cli.js",
     "dev": "npx tsx src/cli.ts",
     "prepublishOnly": "npm run build"

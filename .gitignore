@@ -8,3 +8,4 @@ build/
 .codex
 .codex/
 package-lock.json
+artifacts/

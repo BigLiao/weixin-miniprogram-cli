@@ -39,6 +39,23 @@ npm run test:watch
 
 当前首批用例覆盖命令解析、上下文状态管理和项目路径校验等稳定基础能力；后续命令级行为可以继续在此基础上补齐。
 
+端到端测试单独执行：
+
+```bash
+WX_E2E=1 npm run test:e2e
+```
+
+默认会使用 `examples/miniprogram-demo` 作为示例项目，也支持环境变量覆盖：
+
+```bash
+WX_E2E=1 \
+WX_E2E_PROJECT=./examples/miniprogram-demo \
+WX_E2E_AUTO_PORT=9420 \
+npm run test:e2e
+```
+
+E2E 依赖本机已安装并登录微信开发者工具，且已开启“服务端口”。运行产物会保存到 `artifacts/e2e/`。
+
 ### 安装 Skill
 
 通过自带命令可以自动安装 Skill。
